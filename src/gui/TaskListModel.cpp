@@ -109,12 +109,16 @@ QHash<int, QByteArray> TaskListModel::roleNames() const {
 }
 
 void TaskListModel::addTask(const DownloadTask& task) {
+    qDebug() << "TaskListModel::addTask called with id:" << task.id << "url:" << task.url;
+
     // 检查是否已存在
     if (m_idToIndex.contains(task.id)) {
+        qDebug() << "Task already exists, skipping";
         return;
     }
 
     int row = m_tasks.count();
+    qDebug() << "Inserting at row:" << row;
     beginInsertRows(QModelIndex(), row, row);
 
     m_tasks.append(task);
@@ -122,6 +126,7 @@ void TaskListModel::addTask(const DownloadTask& task) {
 
     endInsertRows();
 
+    qDebug() << "Task added successfully, total tasks:" << m_tasks.count();
     emit taskAdded(task);
 }
 

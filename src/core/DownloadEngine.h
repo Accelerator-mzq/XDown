@@ -55,26 +55,26 @@ public:
      * @param localPath 本地保存路径
      * @return 是否添加成功 (失败时返回错误信息)
      */
-    QString addNewTask(const QString& url, const QString& localPath);
+    Q_INVOKABLE QString addNewTask(const QString& url, const QString& localPath);
 
     /**
      * @brief 暂停任务
      * @param id 任务ID
      */
-    void pauseTask(const QString& id);
+    Q_INVOKABLE void pauseTask(const QString& id);
 
     /**
      * @brief 继续/开始任务
      * @param id 任务ID
      */
-    void resumeTask(const QString& id);
+    Q_INVOKABLE void resumeTask(const QString& id);
 
     /**
      * @brief 删除任务
      * @param id 任务ID
      * @param deleteFile 是否同时删除本地文件
      */
-    void deleteTask(const QString& id, bool deleteFile = false);
+    Q_INVOKABLE void deleteTask(const QString& id, bool deleteFile = false);
 
     /**
      * @brief 获取所有任务
@@ -98,7 +98,7 @@ public:
      * @brief 获取默认保存路径
      * @return 默认保存路径
      */
-    QString getDefaultSavePath() const;
+    Q_INVOKABLE QString getDefaultSavePath() const;
 
 signals:
     /**
@@ -143,6 +143,13 @@ signals:
      * @param tasks 任务列表
      */
     void allTasksLoaded(const QList<DownloadTask>& tasks);
+
+    /**
+     * @brief 下载完成信号 (转发自 HttpDownloader)
+     * @param id 任务ID
+     * @param localPath 本地文件路径
+     */
+    void downloadFinished(const QString& id, const QString& localPath);
 
 public slots:
     /**

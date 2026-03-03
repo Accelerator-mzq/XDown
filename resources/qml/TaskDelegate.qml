@@ -18,19 +18,18 @@ Rectangle {
     // 任务状态: 0=等待, 1=下载中, 2=暂停, 3=完成, 4=错误
     property int taskStatus: model.status
 
+    // 从 Main.qml 传入的当前 tab
+    property int currentTab: 0
+
     // 根据状态过滤显示
     visible: {
-        if (parent && parent.parent && parent.parent.currentTab !== undefined) {
-            var tab = parent.parent.currentTab
-            if (tab === 0) {
-                // 下载中: 等待、下载中、暂停、错误
-                return taskStatus !== 3
-            } else {
-                // 已完成: 只显示完成
-                return taskStatus === 3
-            }
+        if (currentTab === 0) {
+            // 下载中: 等待、下载中、暂停、错误（不显示已完成的）
+            return taskStatus !== 3
+        } else {
+            // 已完成: 只显示完成的
+            return taskStatus === 3
         }
-        return true
     }
 
     signal pauseClicked(string id)

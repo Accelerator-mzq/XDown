@@ -15,10 +15,10 @@ Dialog {
     width: 500
     height: 220
     modal: true
-    standardButtons: Dialog.Ok | Dialog.Cancel
 
     // 信号
     signal accepted(string url, string savePath)
+    signal rejected()
 
     // 默认保存路径
     property string defaultSavePath: downloadEngine ? downloadEngine.getDefaultSavePath() : ""
@@ -90,26 +90,42 @@ Dialog {
             font.pixelSize: 12
             color: "#888888"
         }
+
+        // 按钮区域
+        RowLayout {
+            Layout.fillWidth: true
+            Item { Layout.fillWidth: true }
+            Button {
+                text: "取消"
+                onClicked: {
+                    root.close()
+                }
+            }
+            Button {
+                text: "确定"
+                onClicked: {
+                    var url = urlInput.text.trim()
+                    var path = savePathInput.text.trim()
+
+                    if (!url) {
+                        errorDialog.text = "请输入下载链接"
+                        errorDialog.open()
+                        return
+                    }
+
+                    if (!path) {
+                        errorDialog.text = "请选择保存位置"
+                        errorDialog.open()
+                        return
+                    }
+
+                    accepted(url, path)
+                    root.close()
+                }
+            }
+        }
     }
 
-    onAccepted: {
-        var url = urlInput.text.trim()
-        var path = savePathInput.text.trim()
-
-        if (!url) {
-            errorDialog.text = "请输入下载链接"
-            errorDialog.open()
-            return
-        }
-
-        if (!path) {
-            errorDialog.text = "请选择保存位置"
-            errorDialog.open()
-            return
-        }
-
-        accepted(url, path)
-    }
 
     MessageDialog {
         id: errorDialog

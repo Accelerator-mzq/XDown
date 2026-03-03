@@ -32,6 +32,8 @@
 | **UT-5.1-1** | `TaskListModel`  | `addTask()`                     | 构造一个 TaskListModel 实例；添加一个任务后再移除。          | `rowCount()` 返回 1；                                        |
 | **UT-5.1-2** | `TaskListModel`  | `removeTask()`                  | 构造一个 TaskListModel 实例后再移除。                        | 移除后 `rowCount()` 返回 0；                                 |
 | **UT-5.2**   | `TaskListModel`  | `updateTaskProgress()`          | 模型中已存在一个 ID 为 `task-001` 的任务；调用 `updateTaskProgress()` 更新进度。 | 再次调用 `data()` 获取该任务，进度相关字段已更新。           |
+| **UT-5.2-1** | `TaskListModel`  | `updateTaskStatus()` (新增-漏测) | 模型中已存在一个 ID 为 `task-001` 的任务，状态为 `Downloading`；调用 `updateTaskStatus()` 将状态更新为 `Finished`。 | 再次调用 `data()` 获取该任务，状态已变为 `Finished`，`statusText` 为"已完成"。 |
+| **UT-5.2-2** | `TaskListModel`  | `updateTaskStatus()` 错误状态 (新增-漏测) | 模型中已存在一个任务；调用 `updateTaskStatus()` 将状态更新为 `Error`，传入错误信息。 | 状态变为 `Error`，`errorMessage` 包含传入的错误信息。 |
 | **UT-5.3**   | `TaskListModel`  | `rowCount() / data()`           | 模型中添加 2 个任务；调用 `data()` 获取索引 0 的任务。       | `rowCount()` 返回 2；返回的任务字段与添加时一致。            |
 | **UT-5.4**   | `TaskListModel`  | `getTaskIndex()`                | 模型中添加 3 个任务，ID 分别为 `a`, `b`, `c`。               | `getTaskIndex("b")` 返回 1；`getTaskIndex("nonexistent")` 返回 -1。 |
 | **UT-5.5**   | `TaskListModel`  | `clearAll()`                    | 模型中已添加多个任务。                                       | 调用后 `rowCount()` 返回 0。                                 |
