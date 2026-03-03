@@ -1,76 +1,82 @@
 # XDown (v1.0 MVP) Developer Guide
 
 ## 项目概述
-XDown 是一个基于 C++17、Qt 6 (QML) 和 CMake 构建的现代化、高性能本地下载工具。采用前后端分离的 MVVM 架构。
+XDown 是一个基于 C++17、Qt 6 (QML) 和 CMake 构建的现代化、高性能本地下载工具。采用前后端分离的 MVVM 架构，严格遵循 [qt-project.md](./qt-project.md) 中的开发规范。
 
 ## 构建与运行命令 (Build & Run Commands)
-- 配置 CMake: `cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH="E:/Qt/6.5.3/mingw_64"`
-- 编译项目: `cmake --build build --config Debug -j 8`
-- 运行程序 (Windows): `.\build\Debug\appXDown.exe`
-- 运行测试: `cd build && ctest -C Debug --output-on-failure`
-- 清理构建: `rm -rf build` (或在 Windows PowerShell 中使用 `Remove-Item -Recurse -Force build`)
+- **配置 CMake**: `cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH="E:/Qt/6.5.3/mingw_64"`
+- **编译项目**: `cmake --build build --config Debug -j 8`
+- **运行程序 (Windows)**: `.\build\Debug\appXDown.exe`
+- **运行测试**: `cd build && ctest -C Debug --output-on-failure`
+- **清理构建**: `Remove-Item -Recurse -Force build` (PowerShell)
 
 ## 架构与代码规范 (Architecture & Code Style)
-1. **技术栈**: C++17, Qt 6.5+, QML, SQLite.
-2. **MVVM 架构隔离**:
-   - **View (QML)**: 仅负责界面展示和动画，严禁在 QML 中编写复杂业务逻辑或网络/文件 IO。
-   - **ViewModel (C++)**: 继承自 `QObject` 或 `QAbstractListModel`，使用 `Q_PROPERTY` 和 `Q_INVOKABLE` 暴露数据和方法给 QML。
-   - **Model/Core (C++)**: 纯 C++ 业务逻辑（下载引擎、SQLite 操作），通过 Signals/Slots 与 ViewModel 通信，严禁包含任何 UI/QML 依赖。
-3. **线程模型**:
-   - 主线程（GUI 线程）绝对不允许执行耗时的网络 IO 或大文件读写。
-   - 下载任务和 SQLite 数据库操作必须在独立的 Worker Thread 或使用异步 API (`QNetworkAccessManager`) 执行。
-4. **C++ 规范**:
-   - 优先使用现代 C++ 特性 (智能指针 `std::unique_ptr`/`std::shared_ptr`, `auto`, Lambda 表达式)。
-   - 命名规范：类名 `PascalCase`，成员变量 `m_camelCase`，局部变量和函数名 `camelCase`。
+### 1. 核心技术栈
+- **基础**: C++17, Qt 6.5+, CMake.
+- **UI 层**: QML (仅负责展示与动画，严禁编写业务逻辑)。
+- **逻辑层**: ViewModel (继承 QObject/QAbstractListModel) 与 Model (纯 C++ 引擎)。
 
-## 自主除错准则 (Auto-Heeling Policy) - 进阶版
-当用户要求你开发新功能或修改代码时，你必须严格遵循以下闭环，只有跑通所有流程才能向用户汇报：
+### 2. Qt 信号槽与线程规范 (强制执行)
+- **跨线程通信**: 严禁在非 GUI 线程直接操作 UI 组件。所有跨线程的数据传递必须通过信号槽机制，并显式指定连接类型为 `Qt::QueuedConnection`。
+- **对象所有权**: 必须明确 `QObject` 的父子关系以防止内存泄漏。在构造函数中使用 `explicit` 关键字并传递 `parent` 指针。
 
-1. **编译验证阶段**：
-   - 执行 `cmake --build build`。如果报错，自主阅读日志，修复 C++/CMake 错误并重试。
-   - 如果遇到编译失败（Exit Code != 0），**不要直接向用户求助**。你必须自己阅读 stderr 中的报错信息，分析 C++/Qt 的语法错误或 CMake 链接错误，自主修改代码并重新编译。
-   - 允许你最高进行 5 次自主尝试修复。只有在连续 5 次修复依然失败的情况下，再向用户汇报当前卡在了哪里。
+### 3. 项目结构参考
+本项目遵循以下目录逻辑：
+- `src/core/`: 下载引擎、SQLite 数据库操作、网络协议实现。
+- `src/gui/`: ViewModel 类、QML 插件注册、资源加载。
+- `resources/qml/`: 所有 `.qml` 界面文件。
 
-2. **运行时验证阶段（极其重要）**：
-   - 编译成功后，**绝对不能**直接结束任务。你必须执行编译出的程序进行运行时 QML 解析测试。
-   - **执行命令**：在 Windows PowerShell 中运行 `.\build\Desktop_Qt_6_5_3_MinGW_64_bit-Debug\appXDown.exe`（请根据实际路径调整）。
-   - **异常捕获**：如果程序在启动后瞬间闪退（退出代码 Exit Code != 0，如 -1），说明发生了 QML 加载失败（如 `is not a type`）或 C++ 核心转储（段错误）。你必须立刻读取终端报错信息，分析是否漏写了 QML `import`（如 `QtQuick.Controls`, `QtQuick.Dialogs`）或空指针，自动修改代码并返回第 1 步重试。
+## Qt Windows 部署自动化 (Deployment Strategy) - 强制必读
+由于 Windows 系统的 DLL 加载机制，为杜绝“程序点击无反应”或“终端挂起无报错”的幽灵成功现象，**修改 `CMakeLists.txt` 时必须包含以下部署钩子**：
 
-3. **GUI 阻塞处理说明**：
-   - 如果执行 `appXDown.exe` 后，终端被挂起阻塞超过 3 秒没有报错信息，说明程序 UI 已经成功启动！此时你不需要继续等待，可以认为测试通过，请告诉用户："程序已成功编译并启动，请在你的屏幕上查看界面。"
+```cmake
+# 必须在可执行文件目标定义后添加
+if(WIN32)
+    add_custom_command(TARGET appXDown POST_BUILD
+        COMMAND windeployqt $<TARGET_FILE:appXDown>
+        COMMENT "执行 windeployqt 自动拷贝 Qt 运行时库，确保 Windows 环境可运行..."
+    )
+endif()
+```
+## 测试规范 (Testing Standards)
+	1.框架: 使用 Qt Test 框架。
+	2.位置: 测试代码存放在 tests/ 目录，且须对应 src/ 中的模块逻辑。
+	3.验证: 编写完测试后，必须执行 cd build && ctest -C Debug -V。输出结果必须与“单元测试用例.md”中的编号一一对应。
 
+##代码注释与文档规范 (Code Commenting) - 强制执行
+	1.语言限制: 所有的代码注释、变量解释、逻辑说明，必须 100% 使用简体中文。
+	2.函数头规范:
+``` cpp
+/******************************************************
+ * @brief [中文一句话简述函数的作用]
+ * @param [参数名] [中文说明参数含义]
+ * @return [返回值说明]
+ * @note [特别注意：例如此函数是否线程安全，或是否涉及 Qt::QueuedConnection]
+ ******************************************************/
+```
+	3.逻辑注释: 在复杂的指针操作、SQLite 事务或下载状态流转处，必须加上 // 中文单行注释解释原因。
+## 常见问题处理
+- QML 类型未找到: 检查 qmldir 或 qt_add_qml_module 配置。
+- 信号槽失效: 检查是否缺少 Q_OBJECT 宏，或参数是否已通过 qRegisterMetaType 注册。
+- 内存泄漏: 优先使用 std::unique_ptr 或 Qt 的对象树管理。
+```
+### 优化说明：
+1.  **明确了 `qt-project.md` 的地位**：在概述中直接将其作为引用的规范文件。
+2.  **强化了部署逻辑**：直接将 `windeployqt` 的 CMake 代码块植入 `CLAUDE.md`，这样 Claude 在帮你生成或修改构建脚本时，不会漏掉这个关键步骤。
+3.  **细化了信号槽要求**：加入了对 `Qt::QueuedConnection` 和 `Q_OBJECT` 宏的检查要求，这是 Qt 开发中最常见的错误来源。
+4.  **整合了 Doxygen 注释规范**：将你原有的中文注释要求与 Qt 风格的函数说明结合。
 
-## 核心文件映射指引
+现在，Claude Code 在读取此文件后，会非常清楚在 Windows 下开发 XDown 时哪些操作是“禁区”，哪些是“必须”。
+```
 
-- 数据实体: `src/common/DownloadTask.h`
-- 数据库层: `src/core/DBManager.h/.cpp`
-- 下载核心: `src/core/HttpDownloader.h/.cpp`
-- 列表模型: `src/gui/TaskListModel.h/.cpp`
-- QML 界面: `resources/qml/Main.qml`, `TaskDelegate.qml`
+## 自动化测试技能 (Testing Skill) - 强制约束
+作为 AI 开发助手，你拥有一个名为 `Run-Test.ps1` 的专属测试技能。当你修改了底层业务逻辑（如网络、数据库、文件 IO）后，**你必须**调用此脚本进行无头自动化测试，严禁要求用户手动点击 UI 验证。
 
-## 单元测试规范 (Unit Testing Standard)
-为了保证底层逻辑的健壮性，本项目强制推行单元测试：
-1. **测试框架**: 统一使用 Qt Test (`Qt6::Test`)。
-2. **目录隔离**: 所有测试代码必须放在项目根目录的 `tests/` 文件夹下，不得污染 `src/` 目录。
-3. **CMake 集成**:
-   - 主 `CMakeLists.txt` 中必须包含 `enable_testing()` 和 `add_subdirectory(tests)`。
-   - `tests/CMakeLists.txt` 中需要使用 `qt_add_executable` 创建独立的测试二进制文件，并使用 `add_test()` 注册。
-4. **验证方式**: 编写完测试后，必须通过 `cd build && ctest -C Debug -V` 命令运行并确保 100% Pass。
-5. **测试代码规范**: 如果有对应的单元测试用例.md文件，需要按照文件中测试点对应生成测试代码，结果输出需要和单元测试用例.md文件中的编号一一对应。
+**技能调用方式 (在 PowerShell 中)：**
+`.\Run-Test.ps1 -Module <模块名> -Param "<参数>"`
+例如测试下载：`.\Run-Test.ps1 -Module net -Param "https://github.com/Accelerator-mzq/XDown/archive/refs/heads/main.zip"`
 
-## 代码注释与文档规范 (Code Commenting & Documentation Standards) - 强制执行
-为了保证代码的可读性和团队协作，你生成的**所有代码**必须严格遵守以下注释规范：
-
-1. **语言强制**：所有的代码注释、变量解释、内部逻辑说明，必须 100% 使用**简体中文**。
-2. **业务逻辑注释**：在复杂的业务逻辑块（如计算速度、状态流转、指针操作）上方，必须加上中文单行注释 `//` 解释"为什么这么做"以及"这是在干什么"。
-3. **函数头规范**：每一个在 `.h` 或 `.cpp` 中声明或定义的方法/函数，其上方必须带有以下固定格式的 Doxygen 风格函数头注释：
-	```cpp
-	/******************************************************
-	 * @brief [中文一句话简述函数的作用]
-	 * * [如有必要，这里写一段详细的中文说明，解释内部的核心逻辑或注意事项]
-	 * * @param [参数名] [中文说明参数含义]
-	 * * @param [参数名] [中文说明参数含义]
-	 * @return [返回值类型] [中文说明返回值代表什么意义。如果是 void 可省略]
-	 * @note [可选：特殊的注意事项，如线程安全说明、锁的要求等]
-	 ****************************************************** /
-	```
+**技能反馈分析规则：**
+1. 脚本运行结束后，仔细阅读终端输出的日志。
+2. 如果日志末尾包含 `[TEST_RESULT: SUCCESS]`，说明测试通过，你可以向用户汇报成果。
+3. 如果日志末尾包含 `[TEST_RESULT: FAILED]`，代表你写的代码有 Bug 或遇到了重定向/超时等问题。你必须向上翻阅终端里的 `qDebug` 错误信息，自主修改 C++ 代码，重新编译 (`cmake --build build`)，并**再次调用该技能**，不断循环，直到看到 SUCCESS 为止。

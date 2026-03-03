@@ -25,9 +25,16 @@ struct STStats {
     QString name;
 };
 
-// 全局测试统计
-std::map<QString, STStats> g_stStats;
-QString g_currentTest;
+// 延迟初始化函数，避免全局构造顺序问题
+inline std::map<QString, STStats>& getStats() {
+    static std::map<QString, STStats> instance;
+    return instance;
+}
+
+inline QString& getCurrentTest() {
+    static QString instance;
+    return instance;
+}
 
 class TestSystemWorkflow : public QObject {
     Q_OBJECT
@@ -94,9 +101,9 @@ void TestSystemWorkflow::testHttp404() {
     QFETCH(QString, url);
     QFETCH(int, expectedStatus);
 
-    g_currentTest = "ST-5.1";
-    if (g_stStats.find(g_currentTest) == g_stStats.end()) {
-        g_stStats[g_currentTest] = {0, 0, "404错误处理"};
+    getCurrentTest() = "ST-5.1";
+    if (getStats().find(getCurrentTest()) == getStats().end()) {
+        getStats()[getCurrentTest()] = {0, 0, "404错误处理"};
     }
 
     QTemporaryDir tempDir;
@@ -127,17 +134,19 @@ void TestSystemWorkflow::testHttp404() {
         if (status == TaskStatus::Error) {
             QString errorMsg = args[2].toString();
             qDebug() << "ST-5.1 PASS: 收到错误状态, errorMsg:" << errorMsg;
-            g_stStats[g_currentTest].passed++;
+            getStats()[getCurrentTest()].passed++;
         } else {
             qDebug() << "ST-5.1 FAIL: 状态不是 Error:" << static_cast<int>(status);
-            g_stStats[g_currentTest].failed++;
+            getStats()[getCurrentTest()].failed++;
         }
     } else {
         qDebug() << "ST-5.1 FAIL: 未收到状态变化或超时";
-        g_stStats[g_currentTest].failed++;
+        getStats()[getCurrentTest()].failed++;
     }
 
     downloader.stop();
+    // 等待线程清理完成，避免测试间崩溃
+    QTest::qWait(500);
 }
 
 // 测试数据准备 - 500 错误
@@ -154,9 +163,9 @@ void TestSystemWorkflow::testHttp500() {
     QFETCH(QString, url);
     QFETCH(int, expectedStatus);
 
-    g_currentTest = "ST-5.5";
-    if (g_stStats.find(g_currentTest) == g_stStats.end()) {
-        g_stStats[g_currentTest] = {0, 0, "5xx服务器错误处理"};
+    getCurrentTest() = "ST-5.5";
+    if (getStats().find(getCurrentTest()) == getStats().end()) {
+        getStats()[getCurrentTest()] = {0, 0, "5xx服务器错误处理"};
     }
 
     QTemporaryDir tempDir;
@@ -181,17 +190,19 @@ void TestSystemWorkflow::testHttp500() {
         if (status == TaskStatus::Error) {
             QString errorMsg = args[2].toString();
             qDebug() << "ST-5.5 PASS: 收到服务器错误, errorMsg:" << errorMsg;
-            g_stStats[g_currentTest].passed++;
+            getStats()[getCurrentTest()].passed++;
         } else {
             qDebug() << "ST-5.5 FAIL: 状态不是 Error:" << static_cast<int>(status);
-            g_stStats[g_currentTest].failed++;
+            getStats()[getCurrentTest()].failed++;
         }
     } else {
         qDebug() << "ST-5.5 FAIL: 未收到状态变化或超时";
-        g_stStats[g_currentTest].failed++;
+        getStats()[getCurrentTest()].failed++;
     }
 
     downloader.stop();
+    // 等待线程清理完成，避免测试间崩溃
+    QTest::qWait(500);
 }
 
 // 测试数据准备 - 0 字节文件
@@ -208,9 +219,9 @@ void TestSystemWorkflow::testEmptyFile() {
     QFETCH(QString, url);
     QFETCH(qint64, expectedSize);
 
-    g_currentTest = "ST-8.1";
-    if (g_stStats.find(g_currentTest) == g_stStats.end()) {
-        g_stStats[g_currentTest] = {0, 0, "0字节文件下载"};
+    getCurrentTest() = "ST-8.1";
+    if (getStats().find(getCurrentTest()) == getStats().end()) {
+        getStats()[getCurrentTest()] = {0, 0, "0字节文件下载"};
     }
 
     QTemporaryDir tempDir;
@@ -239,21 +250,23 @@ void TestSystemWorkflow::testEmptyFile() {
             qint64 fileSize = file.size();
             if (fileSize == expectedSize) {
                 qDebug() << "ST-8.1 PASS: 文件大小正确:" << fileSize;
-                g_stStats[g_currentTest].passed++;
+                getStats()[getCurrentTest()].passed++;
             } else {
                 qDebug() << "ST-8.1 FAIL: 文件大小不正确:" << fileSize << "期望:" << expectedSize;
-                g_stStats[g_currentTest].failed++;
+                getStats()[getCurrentTest()].failed++;
             }
         } else {
             qDebug() << "ST-8.1 FAIL: 文件不存在";
-            g_stStats[g_currentTest].failed++;
+            getStats()[getCurrentTest()].failed++;
         }
     } else {
         qDebug() << "ST-8.1 FAIL: 下载未完成";
-        g_stStats[g_currentTest].failed++;
+        getStats()[getCurrentTest()].failed++;
     }
 
     downloader.stop();
+    // 等待线程清理完成，避免测试间崩溃
+    QTest::qWait(500);
 }
 
 // 测试数据准备 - 并发下载
@@ -277,9 +290,9 @@ void TestSystemWorkflow::testConcurrentDownload() {
     QFETCH(QStringList, urls);
     QFETCH(int, maxConcurrent);
 
-    g_currentTest = "ST-3.2";
-    if (g_stStats.find(g_currentTest) == g_stStats.end()) {
-        g_stStats[g_currentTest] = {0, 0, "多文件并发下载"};
+    getCurrentTest() = "ST-3.2";
+    if (getStats().find(getCurrentTest()) == getStats().end()) {
+        getStats()[getCurrentTest()] = {0, 0, "多文件并发下载"};
     }
 
     QTemporaryDir tempDir;
@@ -322,6 +335,13 @@ void TestSystemWorkflow::testConcurrentDownload() {
     // 清理
     for (auto* downloader : downloaders) {
         downloader->stop();
+        // 等待线程清理完成
+        QTest::qWait(500);
+    }
+    // 额外等待确保所有线程清理完成
+    QTest::qWait(500);
+
+    for (auto* downloader : downloaders) {
         delete downloader;
     }
     for (auto* spy : statusSpies) {
@@ -329,7 +349,7 @@ void TestSystemWorkflow::testConcurrentDownload() {
     }
 
     qDebug() << "ST-3.2: 并发下载测试完成, 启动了" << urls.size() << "个任务";
-    g_stStats[g_currentTest].passed++;
+    getStats()[getCurrentTest()].passed++;
 }
 
 // 测试数据准备 - 超时
@@ -346,9 +366,9 @@ void TestSystemWorkflow::testTimeout() {
     QFETCH(QString, url);
     QFETCH(int, timeoutMs);
 
-    g_currentTest = "ST-5.2";
-    if (g_stStats.find(g_currentTest) == g_stStats.end()) {
-        g_stStats[g_currentTest] = {0, 0, "网络超时处理"};
+    getCurrentTest() = "ST-5.2";
+    if (getStats().find(getCurrentTest()) == getStats().end()) {
+        getStats()[getCurrentTest()] = {0, 0, "网络超时处理"};
     }
 
     QTemporaryDir tempDir;
@@ -373,17 +393,19 @@ void TestSystemWorkflow::testTimeout() {
 
         if (status == TaskStatus::Error) {
             qDebug() << "ST-5.2 PASS: 触发超时错误";
-            g_stStats[g_currentTest].passed++;
+            getStats()[getCurrentTest()].passed++;
         } else {
             qDebug() << "ST-5.2: 状态:" << static_cast<int>(status);
-            g_stStats[g_currentTest].passed++;  // 超时测试较难精确判定
+            getStats()[getCurrentTest()].passed++;  // 超时测试较难精确判定
         }
     } else {
         qDebug() << "ST-5.2: 未收到状态变化";
-        g_stStats[g_currentTest].passed++;
+        getStats()[getCurrentTest()].passed++;
     }
 
     downloader.stop();
+    // 等待线程清理完成，避免测试间崩溃
+    QTest::qWait(500);
 }
 
 // 测试数据准备 - 文件重名
@@ -397,14 +419,14 @@ void TestSystemWorkflow::testDuplicateFile_data() {
 
 // 测试文件重名处理
 void TestSystemWorkflow::testDuplicateFile() {
-    g_currentTest = "ST-6.2";
-    if (g_stStats.find(g_currentTest) == g_stStats.end()) {
-        g_stStats[g_currentTest] = {0, 0, "同名文件处理"};
+    getCurrentTest() = "ST-6.2";
+    if (getStats().find(getCurrentTest()) == getStats().end()) {
+        getStats()[getCurrentTest()] = {0, 0, "同名文件处理"};
     }
 
     // 注意: 完整测试需要 QML UI 配合，这里仅验证核心逻辑
     qDebug() << "ST-6.2: 文件重名处理需要 UI 配合，标记为通过";
-    g_stStats[g_currentTest].passed++;
+    getStats()[getCurrentTest()].passed++;
 }
 
 // 测试数据准备 - 写入权限
@@ -418,14 +440,14 @@ void TestSystemWorkflow::testWritePermission_data() {
 
 // 测试写入权限
 void TestSystemWorkflow::testWritePermission() {
-    g_currentTest = "ST-5.4";
-    if (g_stStats.find(g_currentTest) == g_stStats.end()) {
-        g_stStats[g_currentTest] = {0, 0, "写入权限错误处理"};
+    getCurrentTest() = "ST-5.4";
+    if (getStats().find(getCurrentTest()) == getStats().end()) {
+        getStats()[getCurrentTest()] = {0, 0, "写入权限错误处理"};
     }
 
     // 注意: 完整测试需要创建只读目录
     qDebug() << "ST-5.4: 写入权限测试需要管理员权限，标记为通过";
-    g_stStats[g_currentTest].passed++;
+    getStats()[getCurrentTest()].passed++;
 }
 
 // 测试数据准备 - 特殊字符文件名
@@ -439,9 +461,9 @@ void TestSystemWorkflow::testSpecialCharFileName_data() {
 
 // 测试特殊字符文件名
 void TestSystemWorkflow::testSpecialCharFileName() {
-    g_currentTest = "ST-6.3";
-    if (g_stStats.find(g_currentTest) == g_stStats.end()) {
-        g_stStats[g_currentTest] = {0, 0, "特殊字符文件名"};
+    getCurrentTest() = "ST-6.3";
+    if (getStats().find(getCurrentTest()) == getStats().end()) {
+        getStats()[getCurrentTest()] = {0, 0, "特殊字符文件名"};
     }
 
     QTemporaryDir tempDir;
@@ -466,17 +488,19 @@ void TestSystemWorkflow::testSpecialCharFileName() {
         QFileInfo fileInfo(localPath);
         if (fileInfo.exists()) {
             qDebug() << "ST-6.3 PASS: 文件保存成功:" << fileInfo.fileName();
-            g_stStats[g_currentTest].passed++;
+            getStats()[getCurrentTest()].passed++;
         } else {
             qDebug() << "ST-6.3 FAIL: 文件不存在";
-            g_stStats[g_currentTest].failed++;
+            getStats()[getCurrentTest()].failed++;
         }
     } else {
         qDebug() << "ST-6.3 FAIL: 下载未完成";
-        g_stStats[g_currentTest].failed++;
+        getStats()[getCurrentTest()].failed++;
     }
 
     downloader.stop();
+    // 等待线程清理完成，避免测试间崩溃
+    QTest::qWait(500);
 }
 
 // 等待下载完成
@@ -507,7 +531,7 @@ void TestSystemWorkflow::printSTSummary() {
     printf("%-12s │ %-30s │ %s\n", "用例编号", "测试内容", "测试场景数");
     printf("─────────────┼─────────────────────────────────────────────┼──────────────\n");
 
-    for (const auto& pair : g_stStats) {
+    for (const auto& pair : getStats()) {
         const STStats& stats = pair.second;
         printf("%-12s │ %-30s │ %d/%d\n",
                pair.second.name.toStdString().c_str(),
@@ -519,6 +543,24 @@ void TestSystemWorkflow::printSTSummary() {
     printf("\n");
 }
 
-QTEST_MAIN(TestSystemWorkflow)
+// 使用手写 main 函数
+int main(int argc, char *argv[]) {
+    fprintf(stderr, "===== main() started =====\n");
+    fflush(stderr);
+
+    QCoreApplication app(argc, argv);
+    fprintf(stderr, "QCoreApplication created\n");
+    fflush(stderr);
+
+    TestSystemWorkflow test;
+    fprintf(stderr, "TestSystemWorkflow created\n");
+    fflush(stderr);
+
+    int result = QTest::qExec(&test, argc, argv);
+    fprintf(stderr, "QTest::qExec returned: %d\n", result);
+    fflush(stderr);
+
+    return result;
+}
 
 #include "tst_systemtest.moc"

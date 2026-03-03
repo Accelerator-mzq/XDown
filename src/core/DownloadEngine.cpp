@@ -71,38 +71,48 @@ void DownloadEngine::initialize() {
 }
 
 QString DownloadEngine::addNewTask(const QString& url, const QString& localPath) {
+    qDebug() << "addNewTask called with url:" << url << "localPath:" << localPath;
+
     // 1. 检查 URL 格式
     if (!isValidUrl(url)) {
         QString error = "无效的 URL 格式，仅支持 http:// 和 https:// 协议";
+        qWarning() << "Invalid URL:" << url;
         emit taskAddFailed(error);
         return error;
     }
+    qDebug() << "URL is valid";
 
     // 2. 检查重复任务
     if (checkDuplicateTask(url)) {
         QString error = "该 URL 正在下载中，请勿重复添加";
+        qWarning() << "Duplicate task:" << url;
         emit taskAddFailed(error);
         return error;
     }
+    qDebug() << "No duplicate task found";
 
     // 3. 解析文件名
     QString fileName = parseFileNameFromUrl(url);
     if (fileName.isEmpty()) {
         fileName = "download_" + QUuid::createUuid().toString(QUuid::WithoutBraces);
     }
+    qDebug() << "Parsed filename:" << fileName;
 
     // 4. 构建完整保存路径
     QString savePath = localPath;
     if (QFileInfo(localPath).isDir()) {
         savePath = localPath + "/" + fileName;
     }
+    qDebug() << "Save path:" << savePath;
 
     // 5. 检查磁盘空间
     if (!checkDiskSpace(savePath)) {
         QString error = "磁盘空间不足";
+        qWarning() << "Insufficient disk space for:" << savePath;
         emit taskAddFailed(error);
         return error;
     }
+    qDebug() << "Disk space OK";
 
     // 6. 创建任务实体
     DownloadTask newTask;
@@ -113,21 +123,26 @@ QString DownloadEngine::addNewTask(const QString& url, const QString& localPath)
     newTask.status = TaskStatus::Waiting;
     newTask.createdAt = QDateTime::currentSecsSinceEpoch();
     newTask.updatedAt = newTask.createdAt;
+    qDebug() << "Created task:" << newTask.id;
 
     // 7. 存入数据库
     DBManager::instance().insertTask(newTask);
+    qDebug() << "Task inserted to DB";
 
     // 8. 加入等待队列或立即开始
     m_tasks.insert(newTask.id, newTask);
 
     if (m_activeDownloaders.size() < MAX_CONCURRENT_DOWNLOADS) {
         // 可以立即开始
+        qDebug() << "Starting download immediately";
         enqueueWaitingTask(newTask);
     } else {
         // 加入等待队列
+        qDebug() << "Adding to waiting queue";
         m_waitingQueue.enqueue(newTask);
     }
 
+    qDebug() << "Emitting taskAdded signal";
     emit taskAdded(newTask);
     return QString();
 }
@@ -269,6 +284,9 @@ void DownloadEngine::onDownloaderStatusChanged(const QString& id, TaskStatus sta
 void DownloadEngine::onDownloadFinished(const QString& id, const QString& localPath) {
     qInfo() << "Download finished:" << id << "->" << localPath;
 
+    // 转发下载完成信号到外部
+    emit downloadFinished(id, localPath);
+
     // 更新内存数据
     auto it = m_tasks.find(id);
     if (it != m_tasks.end()) {
@@ -366,8 +384,8 @@ void DownloadEngine::processWaitingQueue() {
 }
 
 void DownloadEngine::enqueueWaitingTask(const DownloadTask& task) {
-    // 创建下载器
-    auto* downloader = new HttpDownloader(task, this);
+    // 创建下载器 (不传递 parent，否则无法 moveToThread)
+    auto* downloader = new HttpDownloader(task, nullptr);
     m_activeDownloaders.insert(task.id, downloader);
 
     // 连接信号槽

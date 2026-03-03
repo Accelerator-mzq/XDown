@@ -55,30 +55,19 @@ elseif(EXISTS ${XDOWN_ROOT_DIR}/build/Desktop_Qt_6_5_3_MinGW_64_bit-Debug/libXDo
     set(XDOWNCORE_LIB ${XDOWN_ROOT_DIR}/build/Desktop_Qt_6_5_3_MinGW_64_bit-Debug/libXDownCore.a)
 endif()
 
-if(XDOWNCORE_LIB)
-    # 库存在，直接链接
-    target_link_libraries(test_systemtest PRIVATE
-        ${XDOWNCORE_LIB}
-        Qt6::Core
-        Qt6::Test
-        Qt6::Network
-        Qt6::Sql
-    )
-else()
-    # 库不存在，添加源文件直接编译（兼容单独构建场景）
-    target_sources(test_systemtest PRIVATE
-        ${XDOWN_ROOT_DIR}/src/core/DBManager.cpp
-        ${XDOWN_ROOT_DIR}/src/core/HttpDownloader.cpp
-        ${XDOWN_ROOT_DIR}/src/core/DownloadEngine.cpp
-        ${XDOWN_ROOT_DIR}/src/gui/TaskListModel.cpp
-    )
+# 添加源文件直接编译（而不是使用静态库）
+target_sources(test_systemtest PRIVATE
+    ${XDOWN_ROOT_DIR}/src/core/DBManager.cpp
+    ${XDOWN_ROOT_DIR}/src/core/HttpDownloader.cpp
+    ${XDOWN_ROOT_DIR}/src/core/DownloadEngine.cpp
+    ${XDOWN_ROOT_DIR}/src/gui/TaskListModel.cpp
+)
 
-    target_link_libraries(test_systemtest PRIVATE
-        Qt6::Core
-        Qt6::Test
-        Qt6::Network
-        Qt6::Sql
-    )
-endif()
+target_link_libraries(test_systemtest PRIVATE
+    Qt6::Core
+    Qt6::Test
+    Qt6::Network
+    Qt6::Sql
+)
 
 add_test(NAME SystemTest COMMAND test_systemtest)

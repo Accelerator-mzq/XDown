@@ -34,8 +34,8 @@ HttpDownloader::HttpDownloader(const DownloadTask& task, QObject* parent)
     , m_redirectCount(0)
     , m_speedTimer(nullptr)
 {
-    // 创建工作线程
-    m_thread = new QThread(this);
+    // 创建工作线程 (不设置 parent，否则无法 moveToThread)
+    m_thread = new QThread();
     moveToThread(m_thread);
 
     // 在工作线程中初始化网络管理器和定时器
@@ -60,8 +60,10 @@ HttpDownloader::~HttpDownloader() {
 }
 
 void HttpDownloader::initNetworkManager() {
+    qDebug() << "HttpDownloader::initNetworkManager called, thread:" << QThread::currentThreadId();
     // 在工作线程中创建网络管理器
     m_netManager = new QNetworkAccessManager(this);
+    qDebug() << "QNetworkAccessManager created";
 
     // 创建速度计算定时器 (每秒触发一次)
     m_speedTimer = new QTimer(this);
@@ -71,14 +73,23 @@ void HttpDownloader::initNetworkManager() {
     // 处理重定向
     connect(m_netManager, &QNetworkAccessManager::finished,
             this, &HttpDownloader::onFinished);
+
+    qDebug() << "initNetworkManager completed";
 }
 
 void HttpDownloader::start() {
+    qDebug() << "HttpDownloader::start() called for task:" << m_task.id;
     QMetaObject::invokeMethod(this, [this]() {
+        qDebug() << "HttpDownloader::start() executing in thread:" << QThread::currentThreadId();
         if (m_reply) {
             qWarning() << "Task" << m_task.id << "is already downloading";
             return;
         }
+
+        // 重置速度计算变量
+        m_lastDownloadedBytes = m_task.downloadedBytes;
+        m_lastSpeedTime = QDateTime::currentMSecsSinceEpoch();
+        m_currentSpeed = 0;
 
         // 检查磁盘空间 (如果知道文件大小)
         if (m_task.totalBytes > 0 && !checkDiskSpace(m_task.totalBytes - m_task.downloadedBytes)) {
@@ -121,14 +132,18 @@ void HttpDownloader::start() {
         }
 
         // 发起异步 GET 请求
+        qDebug() << "Creating GET request for URL:" << m_task.url;
+        qDebug() << "m_netManager is valid:" << (m_netManager != nullptr);
         m_reply = m_netManager->get(request);
         m_isRedirecting = false;
+        qDebug() << "m_reply created:" << (m_reply != nullptr);
 
         // 连接信号槽
         connect(m_reply, &QNetworkReply::readyRead, this, &HttpDownloader::onReadyRead);
         connect(m_reply, &QNetworkReply::finished, this, &HttpDownloader::onFinished);
         connect(m_reply, &QNetworkReply::errorOccurred, this, &HttpDownloader::onErrorOccurred);
         connect(m_reply, &QNetworkReply::redirected, this, &HttpDownloader::onRedirected);
+        qDebug() << "Signals connected";
 
         // 启动速度计算定时器
         m_lastDownloadedBytes = m_task.downloadedBytes;
@@ -161,6 +176,7 @@ void HttpDownloader::pause() {
 }
 
 void HttpDownloader::stop() {
+    // 使用 Qt::BlockingQueuedConnection 确保同步执行
     QMetaObject::invokeMethod(this, [this]() {
         pause();
 
@@ -168,14 +184,24 @@ void HttpDownloader::stop() {
             delete m_file;
             m_file = nullptr;
         }
-    });
+
+        // 停止速度计算定时器
+        if (m_speedTimer) {
+            m_speedTimer->stop();
+        }
+    }, Qt::BlockingQueuedConnection);
 }
 
 void HttpDownloader::onReadyRead() {
-    if (!m_reply || !m_file) return;
+    qDebug() << "HttpDownloader::onReadyRead called, bytesAvailable:" << m_reply->bytesAvailable();
+    if (!m_reply || !m_file) {
+        qDebug() << "onReadyRead: m_reply or m_file is null";
+        return;
+    }
 
     // ========== 关键修复: 使用固定缓冲区循环读取，避免内存溢出 ==========
     // 不再使用 readAll() 一次性读取所有数据
+    qDebug() << "Starting to read data...";
     while (m_reply->bytesAvailable() > 0) {
         QByteArray buffer = m_reply->read(BUFFER_SIZE);
         if (buffer.isEmpty()) break;
@@ -211,12 +237,18 @@ void HttpDownloader::onReadyRead() {
 }
 
 void HttpDownloader::onFinished() {
-    if (!m_reply) return;
+    qDebug() << "HttpDownloader::onFinished called";
+    if (!m_reply) {
+        qDebug() << "onFinished: m_reply is null";
+        return;
+    }
 
     // 检查是否是重定向响应
     QUrl redirectUrl = m_reply->attribute(QNetworkRequest::RedirectionTargetAttribute).toUrl();
+    qDebug() << "Redirect URL:" << redirectUrl << "m_isRedirecting:" << m_isRedirecting;
     if (redirectUrl.isValid() && !m_isRedirecting) {
         // 由 onRedirected 处理
+        qDebug() << "Redirect detected, let onRedirected handle it";
         return;
     }
 
@@ -224,6 +256,7 @@ void HttpDownloader::onFinished() {
 
     // 检查 HTTP 状态码
     int statusCode = m_reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    qDebug() << "HTTP status code:" << statusCode << "downloadedBytes:" << m_task.downloadedBytes;
 
     // ========== 断点续传检测: 检查服务器是否返回 206 ==========
     if (statusCode == 206) {
@@ -231,17 +264,10 @@ void HttpDownloader::onFinished() {
         m_supportResume = true;
         qInfo() << "Server supports resume (206)";
     } else if (statusCode == 200 && m_task.downloadedBytes > 0 && !m_isRedirecting) {
-        // 200 OK - 服务器不支持断点续传，返回了完整文件
-        // 如果之前已经下载了部分，需要删除旧文件重新下载
-        qWarning() << "Server does not support resume, restarting from beginning";
+        // 200 OK - 服务器不支持断点续传，但文件已经下载完成了
+        // 不需要重新下载，直接完成即可
+        qWarning() << "Server does not support resume, but download completed";
         m_supportResume = false;
-        m_task.downloadedBytes = 0;
-
-        if (m_file && m_file->isOpen()) {
-            m_file->close();
-            m_file->remove();
-            m_file->open(QIODevice::WriteOnly | QIODevice::Truncate);
-        }
     }
 
     // 检查是否有错误
@@ -252,7 +278,10 @@ void HttpDownloader::onFinished() {
     } else {
         // 下载完成
         m_task.status = TaskStatus::Finished;
-        m_task.totalBytes = m_task.downloadedBytes;
+        // 只在未获取到文件大小时才使用已下载的大小
+        if (m_task.totalBytes == 0) {
+            m_task.totalBytes = m_task.downloadedBytes;
+        }
         m_task.speedBytesPerSec = 0;
 
         if (m_file && m_file->isOpen()) {
@@ -269,6 +298,7 @@ void HttpDownloader::onFinished() {
 }
 
 void HttpDownloader::onErrorOccurred(QNetworkReply::NetworkError code) {
+    qWarning() << "HttpDownloader::onErrorOccurred called, error code:" << code;
     qWarning() << "Network error for task" << m_task.id << ":" << code;
 
     m_speedTimer->stop();
@@ -308,6 +338,7 @@ void HttpDownloader::onErrorOccurred(QNetworkReply::NetworkError code) {
 }
 
 void HttpDownloader::onRedirected(const QUrl& url) {
+    qDebug() << "HttpDownloader::onRedirected called, redirect to:" << url;
     m_redirectCount++;
 
     if (m_redirectCount > MAX_REDIRECTS) {
@@ -342,6 +373,7 @@ void HttpDownloader::onRedirected(const QUrl& url) {
 }
 
 void HttpDownloader::onSpeedTimer() {
+    qDebug() << "HttpDownloader::onSpeedTimer called";
     updateSpeedStatistic();
 }
 

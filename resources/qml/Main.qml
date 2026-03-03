@@ -37,7 +37,7 @@ ApplicationWindow {
     // 对话框
     AddTaskDialog {
         id: addTaskDialog
-        onAccepted: {
+        onAccepted: function(url, savePath) {
             var error = downloadEngine.addNewTask(url, savePath)
             if (error) {
                 errorDialog.text = error
@@ -192,6 +192,7 @@ ApplicationWindow {
 
                     model: taskModel
                     delegate: TaskDelegate {
+                        currentTab: root.currentTab
                         onPauseClicked: downloadEngine.pauseTask(id)
                         onResumeClicked: downloadEngine.resumeTask(id)
                         onDeleteClicked: {
