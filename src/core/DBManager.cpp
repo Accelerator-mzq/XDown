@@ -21,17 +21,11 @@ DBManager& DBManager::instance() {
 
 DBManager::DBManager(QObject* parent)
     : QObject(parent)
-    , m_workerThread(nullptr)
     , m_isInitialized(false)
 {
 }
 
 DBManager::~DBManager() {
-    if (m_workerThread) {
-        m_workerThread->quit();
-        m_workerThread->wait();
-        delete m_workerThread;
-    }
     if (m_db.isOpen()) {
         m_db.close();
     }
@@ -52,8 +46,8 @@ bool DBManager::initDB(const QString& dbPath) {
         dir.mkpath(".");
     }
 
-    // 添加数据库连接
-    m_db = QSqlDatabase::addDatabase("QSQLITE");
+    // 添加数据库连接 (P2-4 修复: 使用命名连接避免与测试框架冲突)
+    m_db = QSqlDatabase::addDatabase("QSQLITE", "xdown_main");
     m_db.setDatabaseName(absolutePath);
 
     if (!m_db.open()) {
@@ -212,13 +206,15 @@ QList<DownloadTask> DBManager::loadAllTasks() {
 bool DBManager::hasDuplicateDownloadingTask(const QString& url) const {
     QMutexLocker locker(&m_mutex);
 
+    // P2-2 修复: 同时检查 Downloading 和 Waiting 状态
     QSqlQuery query(m_db);
     query.prepare(R"(
         SELECT COUNT(*) FROM downloads
-        WHERE url = :url AND status = :status
+        WHERE url = :url AND (status = :status1 OR status = :status2)
     )");
     query.bindValue(":url", url);
-    query.bindValue(":status", static_cast<int>(TaskStatus::Downloading));
+    query.bindValue(":status1", static_cast<int>(TaskStatus::Downloading));
+    query.bindValue(":status2", static_cast<int>(TaskStatus::Waiting));
 
     if (query.exec() && query.next()) {
         return query.value(0).toInt() > 0;

@@ -19,6 +19,7 @@
 #include <QTimer>
 #include <QStorageInfo>
 #include <QCoreApplication>
+#include <QRegularExpression>
 
 HttpDownloader::HttpDownloader(const DownloadTask& task, QObject* parent)
     : QObject(parent)
@@ -34,7 +35,6 @@ HttpDownloader::HttpDownloader(const DownloadTask& task, QObject* parent)
     , m_supportResume(true)
     , m_redirectCount(0)
     , m_speedTimer(nullptr)
-    , m_eventLoop(nullptr)
 {
     // 创建工作线程 (不设置 parent，否则无法 moveToThread)
     m_thread = new QThread();
@@ -48,17 +48,37 @@ HttpDownloader::HttpDownloader(const DownloadTask& task, QObject* parent)
 }
 
 HttpDownloader::~HttpDownloader() {
+    // P0-3 修复: 先停止下载
     stop();
+
+    // 等待工作线程结束
     if (m_thread) {
         m_thread->quit();
         m_thread->wait(3000);
         if (m_thread->isRunning()) {
             m_thread->terminate();
+            m_thread->wait(1000);
         }
+
+        // P0-3 修复: 使用 deleteLater 安全删除工作线程中创建的对象
+        // 由于 QObject 有父子关系，m_netManager 和 m_speedTimer 会自动清理
+        // 但 m_reply 和 m_file 需要手动清理
+        if (m_reply) {
+            m_reply->deleteLater();
+            m_reply = nullptr;
+        }
+        if (m_file) {
+            if (m_file->isOpen()) {
+                m_file->close();
+            }
+            m_file->deleteLater();
+            m_file = nullptr;
+        }
+
+        // 删除线程
         delete m_thread;
+        m_thread = nullptr;
     }
-    delete m_file;
-    delete m_netManager;
 }
 
 void HttpDownloader::initNetworkManager() {
@@ -72,20 +92,14 @@ void HttpDownloader::initNetworkManager() {
     m_speedTimer->setInterval(1000);
     connect(m_speedTimer, &QTimer::timeout, this, &HttpDownloader::onSpeedTimer);
 
-    // 处理重定向
-    connect(m_netManager, &QNetworkAccessManager::finished,
-            this, &HttpDownloader::onFinished);
+    // 注意: 不再连接 m_netManager::finished，因为每个请求使用 m_reply::finished
+    // 避免 P0-1: onFinished 被双重触发
 
     qDebug() << "initNetworkManager completed";
 
-    // 不再使用阻塞的事件循环，而是使用 QThread::wait 带超时
-    // 这样可以允许信号槽正常处理
-    while (!m_thread->isInterruptionRequested()) {
-        QThread::msleep(100);
-        QCoreApplication::processEvents();
-    }
-
-    qDebug() << "initNetworkManager exiting";
+    // 使用 QThread 默认的事件循环，不再手动调用 processEvents
+    // 避免 P0-4: 在工作线程中调用 QCoreApplication::processEvents() 的安全问题
+    // QThread::start() 会自动调用 exec() 创建事件循环
 }
 
 void HttpDownloader::start() {
@@ -145,6 +159,13 @@ void HttpDownloader::start() {
         // 发起异步 GET 请求
         qDebug() << "Creating GET request for URL:" << m_task.url;
         qDebug() << "m_netManager is valid:" << (m_netManager != nullptr);
+
+        // P0-2 修复: 先断开旧信号的连接，避免重定向时信号累积
+        if (m_reply) {
+            m_reply->disconnect(this);
+            m_reply->deleteLater();
+        }
+
         m_reply = m_netManager->get(request);
         m_isRedirecting = false;
         qDebug() << "m_reply created:" << (m_reply != nullptr);
@@ -215,6 +236,19 @@ void HttpDownloader::onReadyRead() {
         return;
     }
 
+    // P1-5 修复: 首次获取文件总大小 (在循环外解析一次)
+    // 记录开始时的已下载字节数，用于正确计算总大小
+    static qint64 prevDownloaded = 0;
+    if (m_task.totalBytes == 0 && m_reply->hasRawHeader("Content-Length")) {
+        qint64 contentLength = m_reply->rawHeader("Content-Length").toLongLong();
+        // 如果是断点续传，需要加上已下载的部分
+        if (prevDownloaded > 0 && !m_isRedirecting) {
+            m_task.totalBytes = contentLength + prevDownloaded;
+        } else {
+            m_task.totalBytes = contentLength;
+        }
+    }
+
     // ========== 关键修复: 使用固定缓冲区循环读取，避免内存溢出 ==========
     // 不再使用 readAll() 一次性读取所有数据
     qDebug() << "Starting to read data...";
@@ -225,26 +259,15 @@ void HttpDownloader::onReadyRead() {
         m_file->write(buffer);
         m_task.downloadedBytes += buffer.size();
 
-        // 首次获取文件总大小
-        if (m_task.totalBytes == 0) {
-            // 从 Content-Length header 获取
-            if (m_reply->hasRawHeader("Content-Length")) {
-                qint64 contentLength = m_reply->rawHeader("Content-Length").toLongLong();
-                // 如果是断点续传，需要加上已下载的部分
-                if (m_task.downloadedBytes > 0 && !m_isRedirecting) {
-                    m_task.totalBytes = contentLength + m_task.downloadedBytes;
-                } else {
-                    m_task.totalBytes = contentLength;
-                }
-            }
-        }
-
         // 如果正在重定向，不发送进度更新
         if (!m_isRedirecting) {
             emit progressUpdated(m_task.id, m_task.downloadedBytes,
                                m_task.totalBytes, m_currentSpeed);
         }
     }
+
+    // 更新上次已下载字节数，用于下次计算总大小
+    prevDownloaded = m_task.downloadedBytes;
 
     // 定期刷新文件到磁盘
     if (m_file) {
@@ -280,10 +303,16 @@ void HttpDownloader::onFinished() {
         m_supportResume = true;
         qInfo() << "Server supports resume (206)";
     } else if (statusCode == 200 && m_task.downloadedBytes > 0 && !m_isRedirecting) {
-        // 200 OK - 服务器不支持断点续传，但文件已经下载完成了
-        // 不需要重新下载，直接完成即可
-        qWarning() << "Server does not support resume, but download completed";
+        // P1-3 修复: 200 OK - 服务器不支持断点续传
+        // 如果之前发送了 Range 请求，说明服务器不支持断点续传
+        // 需要删除已下载的文件，重新从头开始下载
+        if (m_file && m_file->exists()) {
+            m_file->close();
+            m_file->remove();
+            qWarning() << "Server does not support resume (200), deleting partial file and restarting";
+        }
         m_supportResume = false;
+        m_task.downloadedBytes = 0;
     }
 
     // 检查是否有错误
@@ -418,7 +447,25 @@ bool HttpDownloader::checkDiskSpace(qint64 requiredBytes) const {
 void HttpDownloader::parseFileName(const QUrl& redirectUrl) {
     QString name;
 
-    if (redirectUrl.isValid()) {
+    // P2-3 修复: 优先从 Content-Disposition 响应头解析文件名
+    if (m_reply && m_reply->hasRawHeader("Content-Disposition")) {
+        QString disposition = QString::fromUtf8(m_reply->rawHeader("Content-Disposition"));
+        // 解析 filename*= 或 filename=
+        QRegularExpression regex(R"(filename\*=([^;\s]+)|filename=["']([^"']+)["'])");
+        QRegularExpressionMatch match = regex.match(disposition);
+        if (match.hasMatch()) {
+            // filename*= UTF-8 编码
+            if (!match.captured(1).isEmpty()) {
+                name = QUrl::fromPercentEncoding(match.captured(1).toUtf8());
+            }
+            // filename=
+            if (name.isEmpty() && !match.captured(2).isEmpty()) {
+                name = match.captured(2);
+            }
+        }
+    }
+
+    if (name.isEmpty() && redirectUrl.isValid()) {
         // 从重定向 URL 解析
         name = redirectUrl.fileName();
     }
@@ -432,6 +479,11 @@ void HttpDownloader::parseFileName(const QUrl& redirectUrl) {
         // 从 URL 解析
         QUrl url(m_task.url);
         name = url.fileName();
+    }
+
+    // 如果仍然没有文件名，使用默认名称
+    if (name.isEmpty()) {
+        name = "download";
     }
 
     if (!name.isEmpty()) {

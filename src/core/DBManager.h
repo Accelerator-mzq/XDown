@@ -140,7 +140,6 @@ private:
 
     QSqlDatabase m_db;              // 数据库连接
     mutable QMutex m_mutex;        // 互斥锁 (保护数据库操作)
-    QThread* m_workerThread;       // 数据库工作线程
     bool m_isInitialized;          // 初始化标志
 };
 
