@@ -265,8 +265,24 @@ void HttpDownloader::onReadyRead() {
 
     // NEW-4: 首次收到数据时解析文件名（此时响应头可用，可以解析 Content-Disposition）
     if (!m_fileNameParsed && m_reply) {
+        QString oldPath = m_task.localPath;
         parseFileName();
         m_fileNameParsed = true;
+
+        // 如果文件名变化，需要重新打开文件
+        if (m_task.localPath != oldPath && m_file) {
+            if (m_file->isOpen()) {
+                m_file->close();
+            }
+            delete m_file;
+            m_file = new QFile(m_task.localPath);
+            if (!m_file->open(QIODevice::WriteOnly | QIODevice::Append)) {
+                m_task.status = TaskStatus::Error;
+                m_task.errorMessage = "无法打开新文件路径: " + m_task.localPath;
+                emit statusChanged(m_task.id, m_task.status, m_task.errorMessage);
+                return;
+            }
+        }
     }
 
     // P1-5 修复: 首次获取文件总大小 (在循环外解析一次)

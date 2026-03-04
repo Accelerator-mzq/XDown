@@ -20,6 +20,7 @@
 #include "common/DownloadTask.h"
 #include "core/HttpDownloader.h"
 #include "core/DownloadEngine.h"
+#include "core/DBManager.h"
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -552,6 +553,10 @@ void TestSystemWorkflow::testDuplicateUrlDetection() {
         return;
     }
 
+    // 清理数据库
+    DBManager::instance().clearAll();
+    QThread::msleep(100);
+
     // 创建 DownloadEngine 实例
     DownloadEngine engine;
     QSignalSpy statusSpy(&engine, &DownloadEngine::taskStatusChanged);
@@ -842,6 +847,10 @@ void TestSystemWorkflow::testDeleteTaskWithFile() {
         return;
     }
 
+    // 清理数据库
+    DBManager::instance().clearAll();
+    QThread::msleep(100);
+
     DownloadEngine engine;
     engine.initialize();
 
@@ -908,6 +917,10 @@ void TestSystemWorkflow::testDeleteTaskKeepFile() {
         getStats()[getCurrentTest()].failed++;
         return;
     }
+
+    // 清理数据库
+    DBManager::instance().clearAll();
+    QThread::msleep(100);
 
     DownloadEngine engine;
     engine.initialize();
@@ -1118,6 +1131,10 @@ void TestSystemWorkflow::testDatabaseRecordValidation() {
         return;
     }
 
+    // 清理数据库
+    DBManager::instance().clearAll();
+    QThread::msleep(100);
+
     DownloadEngine engine;
     engine.initialize();
 
@@ -1183,13 +1200,17 @@ void TestSystemWorkflow::testEndToEndDownload() {
         return;
     }
 
+    // 清理数据库
+    DBManager::instance().clearAll();
+    QThread::msleep(100);
+
     DownloadEngine engine;
     engine.initialize();
 
     QString url = "http://127.0.0.1:8080/file1.zip";
-    QString savePath = tempDir.path() + "/e2etest.zip";
 
-    engine.addNewTask(url, savePath);
+    // 传递目录路径，让 parseFileName 自动解析文件名
+    engine.addNewTask(url, tempDir.path());
 
     // 等待下载完成
     QSignalSpy finishSpy(&engine, &DownloadEngine::downloadFinished);
@@ -1204,8 +1225,19 @@ void TestSystemWorkflow::testEndToEndDownload() {
     QCoreApplication::processEvents();
     QThread::msleep(500);
 
+    // 获取实际保存路径（由 parseFileName 从 Content-Disposition 解析）
+    QList<DownloadTask> tasks = engine.getAllTasks();
+    if (tasks.isEmpty()) {
+        fprintf(stderr, "ST-1.1 FAIL: 没有找到任务\n");
+        getStats()[getCurrentTest()].failed++;
+        return;
+    }
+
+    QString actualPath = tasks.first().localPath;
+    fprintf(stderr, "ST-1.1: actualPath=%s\n", qPrintable(actualPath));
+
     // 验证1: 文件存在
-    QFileInfo fi(savePath);
+    QFileInfo fi(actualPath);
     if (!fi.exists()) {
         fprintf(stderr, "ST-1.1 FAIL: 文件不存在\n");
         getStats()[getCurrentTest()].failed++;
@@ -1221,7 +1253,7 @@ void TestSystemWorkflow::testEndToEndDownload() {
     }
 
     // 验证3: 文件内容正确 (mock server 返回全 'X')
-    QFile file(savePath);
+    QFile file(actualPath);
     if (file.open(QIODevice::ReadOnly)) {
         QByteArray content = file.readAll();
         file.close();
@@ -1264,6 +1296,10 @@ void TestSystemWorkflow::testUIStatusRefreshDownloadComplete() {
         getStats()[getCurrentTest()].failed++;
         return;
     }
+
+    // 清理数据库
+    DBManager::instance().clearAll();
+    QThread::msleep(100);
 
     DownloadEngine engine;
     engine.initialize();
@@ -1314,6 +1350,10 @@ void TestSystemWorkflow::testUIStatusRefreshTabSwitch() {
 
     fprintf(stderr, "testUIStatusRefreshTabSwitch: starting...\n");
     fflush(stderr);
+
+    // 清理数据库
+    DBManager::instance().clearAll();
+    QThread::msleep(100);
 
     // 此测试验证已完成任务在"已完成"视图可见
     // 在Model层，TaskListModel会根据status过滤任务
@@ -1563,6 +1603,10 @@ void TestSystemWorkflow::testResumeDownload() {
         getStats()[getCurrentTest()].failed++;
         return;
     }
+
+    // 清理数据库
+    DBManager::instance().clearAll();
+    QThread::msleep(100);
 
     DownloadTask task;
     task.id = "test-resume-" + QString::number(QDateTime::currentSecsSinceEpoch());
