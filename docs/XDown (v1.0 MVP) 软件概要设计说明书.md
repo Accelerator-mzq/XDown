@@ -112,6 +112,13 @@ class DBManager {
 
     // 删除任务
     bool deleteTask(const QString& id);
+
+    // ========== 新增方法 ==========
+    // 根据ID查询单个任务
+    DownloadTask getTaskById(const QString& id) const;
+
+    // 清空所有任务
+    bool clearAll();
 }
 ```
 
@@ -127,6 +134,11 @@ v1.0 实现基于 HTTP/HTTPS 的单线程断点续传下载器。
 - **断点续传**：检测 HTTP 206 状态码判断服务器是否支持
 - **重定向处理**：支持 301/302/307/308 重定向
 - **速度计算**：每秒计算瞬时下载速度
+
+**线程模型优化** (v1.0.1):
+- 使用 `requestInterruption()` 实现线程优雅退出
+- 使用 `QThread::msleep` 轮询替代阻塞的 `QEventLoop::exec()`
+- 解决 Qt Test 框架与工作线程的兼容性问题
 
 **核心函数**：
 ```cpp

@@ -18,6 +18,7 @@
 #include <QDebug>
 #include <QTimer>
 #include <QStorageInfo>
+#include <QCoreApplication>
 
 HttpDownloader::HttpDownloader(const DownloadTask& task, QObject* parent)
     : QObject(parent)
@@ -33,6 +34,7 @@ HttpDownloader::HttpDownloader(const DownloadTask& task, QObject* parent)
     , m_supportResume(true)
     , m_redirectCount(0)
     , m_speedTimer(nullptr)
+    , m_eventLoop(nullptr)
 {
     // 创建工作线程 (不设置 parent，否则无法 moveToThread)
     m_thread = new QThread();
@@ -75,6 +77,15 @@ void HttpDownloader::initNetworkManager() {
             this, &HttpDownloader::onFinished);
 
     qDebug() << "initNetworkManager completed";
+
+    // 不再使用阻塞的事件循环，而是使用 QThread::wait 带超时
+    // 这样可以允许信号槽正常处理
+    while (!m_thread->isInterruptionRequested()) {
+        QThread::msleep(100);
+        QCoreApplication::processEvents();
+    }
+
+    qDebug() << "initNetworkManager exiting";
 }
 
 void HttpDownloader::start() {
@@ -176,7 +187,12 @@ void HttpDownloader::pause() {
 }
 
 void HttpDownloader::stop() {
-    // 使用 Qt::BlockingQueuedConnection 确保同步执行
+    // 标记线程需要中断
+    if (m_thread) {
+        m_thread->requestInterruption();
+    }
+
+    // 使用 Qt::QueuedConnection 确保异步执行
     QMetaObject::invokeMethod(this, [this]() {
         pause();
 
@@ -189,7 +205,7 @@ void HttpDownloader::stop() {
         if (m_speedTimer) {
             m_speedTimer->stop();
         }
-    }, Qt::BlockingQueuedConnection);
+    }, Qt::QueuedConnection);
 }
 
 void HttpDownloader::onReadyRead() {

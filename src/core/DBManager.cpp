@@ -240,6 +240,32 @@ bool DBManager::deleteTask(const QString& id) {
     return success;
 }
 
+DownloadTask DBManager::getTaskById(const QString& id) const {
+    QMutexLocker locker(&m_mutex);
+
+    QSqlQuery query(m_db);
+    query.prepare("SELECT * FROM downloads WHERE id = :id");
+    query.bindValue(":id", id);
+
+    if (query.exec() && query.next()) {
+        return parseQueryToTask(query);
+    }
+
+    // 未找到时返回空任务
+    return DownloadTask();
+}
+
+bool DBManager::clearAll() {
+    QMutexLocker locker(&m_mutex);
+
+    QSqlQuery query(m_db);
+    bool success = query.exec("DELETE FROM downloads");
+    if (!success) {
+        qWarning() << "Failed to clear all tasks:" << query.lastError().text();
+    }
+    return success;
+}
+
 DownloadTask DBManager::parseQueryToTask(QSqlQuery& query) const {
     DownloadTask task;
     task.id = query.value("id").toString();
