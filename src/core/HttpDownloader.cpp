@@ -33,6 +33,8 @@ HttpDownloader::HttpDownloader(const DownloadTask& task, QObject* parent)
     , m_currentSpeed(0)
     , m_isRedirecting(false)
     , m_supportResume(true)
+    , m_fileNameParsed(false)      // NEW-4: 初始化文件名解析标志
+    , m_restartCount(0)            // NEW-3: 初始化重新下载计数
     , m_redirectCount(0)
     , m_speedTimer(nullptr)
 {
@@ -48,37 +50,43 @@ HttpDownloader::HttpDownloader(const DownloadTask& task, QObject* parent)
 }
 
 HttpDownloader::~HttpDownloader() {
-    // P0-3 修复: 先停止下载
-    stop();
+    // P0-3/NEW-1 修复: 先停止下载，使用 BlockingQueuedConnection 确保 pause 执行完毕
+    if (m_thread && m_thread->isRunning()) {
+        // 用 BlockingQueuedConnection 确保 pause 执行完毕
+        QMetaObject::invokeMethod(this, [this]() {
+            if (m_reply) {
+                m_reply->abort();
+                m_reply->deleteLater();
+                m_reply = nullptr;
+            }
+            if (m_speedTimer) m_speedTimer->stop();
+            if (m_file && m_file->isOpen()) {
+                m_file->flush();
+                m_file->close();
+            }
+        }, Qt::BlockingQueuedConnection);
 
-    // 等待工作线程结束
-    if (m_thread) {
         m_thread->quit();
         m_thread->wait(3000);
         if (m_thread->isRunning()) {
             m_thread->terminate();
             m_thread->wait(1000);
         }
-
-        // P0-3 修复: 使用 deleteLater 安全删除工作线程中创建的对象
-        // 由于 QObject 有父子关系，m_netManager 和 m_speedTimer 会自动清理
-        // 但 m_reply 和 m_file 需要手动清理
-        if (m_reply) {
-            m_reply->deleteLater();
-            m_reply = nullptr;
-        }
-        if (m_file) {
-            if (m_file->isOpen()) {
-                m_file->close();
-            }
-            m_file->deleteLater();
-            m_file = nullptr;
-        }
-
-        // 删除线程
-        delete m_thread;
-        m_thread = nullptr;
     }
+
+    // NEW-1 修复: 线程已结束，安全直接 delete（不再使用 deleteLater）
+    if (m_file) {
+        if (m_file->isOpen()) {
+            m_file->close();
+        }
+        delete m_file;
+        m_file = nullptr;
+    }
+
+    // 删除线程
+    delete m_thread;
+    m_thread = nullptr;
+    // m_netManager 和 m_speedTimer 是 this 的子对象，随 this 析构自动删除
 }
 
 void HttpDownloader::initNetworkManager() {
@@ -115,6 +123,9 @@ void HttpDownloader::start() {
         m_lastDownloadedBytes = m_task.downloadedBytes;
         m_lastSpeedTime = QDateTime::currentMSecsSinceEpoch();
         m_currentSpeed = 0;
+
+        // NEW-4: 重置文件名解析标志（每次开始新下载时重新解析）
+        m_fileNameParsed = false;
 
         // 检查磁盘空间 (如果知道文件大小)
         if (m_task.totalBytes > 0 && !checkDiskSpace(m_task.totalBytes - m_task.downloadedBytes)) {
@@ -252,6 +263,28 @@ void HttpDownloader::onReadyRead() {
         return;
     }
 
+    // NEW-4: 首次收到数据时解析文件名（此时响应头可用，可以解析 Content-Disposition）
+    if (!m_fileNameParsed && m_reply) {
+        QString oldPath = m_task.localPath;
+        parseFileName();
+        m_fileNameParsed = true;
+
+        // 如果文件名变化，需要重新打开文件
+        if (m_task.localPath != oldPath && m_file) {
+            if (m_file->isOpen()) {
+                m_file->close();
+            }
+            delete m_file;
+            m_file = new QFile(m_task.localPath);
+            if (!m_file->open(QIODevice::WriteOnly | QIODevice::Append)) {
+                m_task.status = TaskStatus::Error;
+                m_task.errorMessage = "无法打开新文件路径: " + m_task.localPath;
+                emit statusChanged(m_task.id, m_task.status, m_task.errorMessage);
+                return;
+            }
+        }
+    }
+
     // P1-5 修复: 首次获取文件总大小 (在循环外解析一次)
     if (m_task.totalBytes == 0 && m_reply->hasRawHeader("Content-Length")) {
         qint64 contentLength = m_reply->rawHeader("Content-Length").toLongLong();
@@ -323,7 +356,7 @@ void HttpDownloader::onFinished() {
         m_supportResume = true;
         qInfo() << "Server supports resume (206)";
     } else if (statusCode == 200 && m_task.downloadedBytes > 0 && !m_isRedirecting) {
-        // P1-3 修复: 200 OK - 服务器不支持断点续传
+        // P1-3/NEW-3 修复: 200 OK - 服务器不支持断点续传
         // 如果之前发送了 Range 请求，说明服务器不支持断点续传
         // 关键修复: 检查是否已经下载完成（downloadedBytes >= totalBytes）
         // 如果文件已经下载完成，就不需要重新下载了！
@@ -332,11 +365,13 @@ void HttpDownloader::onFinished() {
         if (sentRangeRequest && m_task.totalBytes > 0 && m_task.downloadedBytes >= m_task.totalBytes) {
             // 文件已经下载完成，不需要重新下载
             qInfo() << "Download completed (200 OK, downloadedBytes >= totalBytes)";
-        } else if (sentRangeRequest && m_file && m_file->exists()) {
+        } else if (sentRangeRequest && m_file && m_file->exists() && m_restartCount < MAX_RESTARTS) {
+            // NEW-3: 添加重启计数器防止无限循环
+            m_restartCount++;
             // 需要删除已下载的文件，重新从头开始下载
             m_file->close();
             m_file->remove();
-            qWarning() << "Server does not support resume (200), restarting download from beginning";
+            qWarning() << "Server does not support resume (200), restarting download from beginning (count:" << m_restartCount << ")";
             m_supportResume = false;
             m_task.downloadedBytes = 0;
 
@@ -347,6 +382,12 @@ void HttpDownloader::onFinished() {
             // 重新开始下载
             start();
             return;
+        } else if (m_restartCount >= MAX_RESTARTS) {
+            // NEW-3: 超过最大重启次数，进入错误状态
+            qWarning() << "Restart count exceeded, entering error state";
+            m_task.status = TaskStatus::Error;
+            m_task.errorMessage = "服务器不支持断点续传，重试次数过多";
+            emit statusChanged(m_task.id, m_task.status, m_task.errorMessage);
         }
     }
 
@@ -508,38 +549,42 @@ bool HttpDownloader::checkDiskSpace(qint64 requiredBytes) const {
 void HttpDownloader::parseFileName(const QUrl& redirectUrl) {
     QString name;
 
-    // P2-3 修复: 优先从 Content-Disposition 响应头解析文件名
+    // NEW-4/NEW-5 修复: 优先从 Content-Disposition 响应头解析文件名
+    // 支持三种格式: filename*=utf-8''xxx, filename="xxx", filename=xxx
     if (m_reply && m_reply->hasRawHeader("Content-Disposition")) {
         QString disposition = QString::fromUtf8(m_reply->rawHeader("Content-Disposition"));
-        // 解析 filename*= 或 filename=
-        QRegularExpression regex(R"(filename\*=([^;\s]+)|filename=["']([^"']+)["'])");
+        // NEW-5: 改进正则以匹配无引号文件名和 filename*=
+        QRegularExpression regex(
+            R"(filename\*=(?:UTF-8''|utf-8'')([^;\s]+))|""
+             R"(filename=["']([^"']+)["'])|""
+             R"(filename=([^;\s"']+)))");
         QRegularExpressionMatch match = regex.match(disposition);
         if (match.hasMatch()) {
-            // filename*= UTF-8 编码
+            // filename*= UTF-8 编码 (已去前缀)
             if (!match.captured(1).isEmpty()) {
                 name = QUrl::fromPercentEncoding(match.captured(1).toUtf8());
             }
-            // filename=
+            // filename="quoted"
             if (name.isEmpty() && !match.captured(2).isEmpty()) {
                 name = match.captured(2);
+            }
+            // filename=unquoted
+            if (name.isEmpty() && !match.captured(3).isEmpty()) {
+                name = match.captured(3);
             }
         }
     }
 
-    if (name.isEmpty() && redirectUrl.isValid()) {
-        // 从重定向 URL 解析
-        name = redirectUrl.fileName();
+    // 如果没有从 Content-Disposition 解析到，尝试从 redirectUrl 或当前 URL 解析
+    QUrl effectiveUrl = redirectUrl.isValid() ? redirectUrl : QUrl(m_task.url);
+    if (name.isEmpty() && effectiveUrl.isValid()) {
+        // 从 URL 解析
+        name = effectiveUrl.fileName();
     }
 
     if (name.isEmpty()) {
         // 从本地路径获取
         name = QFileInfo(m_task.localPath).fileName();
-    }
-
-    if (name.isEmpty()) {
-        // 从 URL 解析
-        QUrl url(m_task.url);
-        name = url.fileName();
     }
 
     // 如果仍然没有文件名，使用默认名称

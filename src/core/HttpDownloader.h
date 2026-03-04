@@ -173,12 +173,15 @@ private:
 
     bool m_isRedirecting;                    // 是否正在重定向
     bool m_supportResume;                    // 服务器是否支持断点续传
+    bool m_fileNameParsed;                   // 是否已解析文件名 (NEW-4)
+    int m_restartCount;                      // 重新下载次数 (NEW-3)
     int m_redirectCount;                    // 重定向次数 (防止无限重定向)
 
     QTimer* m_speedTimer;                    // 速度计算定时器
 
     static const int BUFFER_SIZE = 65536;    // 64KB 缓冲区
     static const int MAX_REDIRECTS = 10;     // 最大重定向次数
+    static const int MAX_RESTARTS = 1;        // 200响应重新下载最大次数 (NEW-3)
 };
 
 #endif // HTTPDOWNLOADER_H
