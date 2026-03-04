@@ -100,6 +100,9 @@ public:
      */
     Q_INVOKABLE QString getDefaultSavePath() const;
 
+    // ST-5.3: 公开 checkDiskSpace 给测试用例使用 (必须在 signals: 之前，否则会被 MOC 当成信号)
+    bool checkDiskSpace(const QString& path, qint64 requiredBytes = 0) const;
+
 signals:
     /**
      * @brief 任务被添加的信号
@@ -181,13 +184,6 @@ private slots:
     void onFlushTimer();
 
 private:
-    /**
-     * @brief 检查磁盘空间
-     * @param path 路径
-     * @param requiredBytes 需要的字节数
-     * @return 空间是否足够
-     */
-    bool checkDiskSpace(const QString& path, qint64 requiredBytes = 0) const;
 
     /**
      * @brief 检查重复任务

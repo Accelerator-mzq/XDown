@@ -73,6 +73,21 @@ void DownloadEngine::initialize() {
 QString DownloadEngine::addNewTask(const QString& url, const QString& localPath) {
     qDebug() << "addNewTask called with url:" << url << "localPath:" << localPath;
 
+    // 0. 处理 QML FolderDialog 返回的 file:/// URL 格式
+    QString path = localPath;
+    if (path.startsWith("file:///")) {
+        // 移除 file:/// 前缀并转换为普通路径
+        path = path.mid(8);  // 移除 "file:///" (8个字符)
+        // Windows 上可能是 /D:/xxx 格式，需要去掉开头的 /
+        if (path.length() >= 2 && path[1] == ':') {
+            // 已经是 D:/xxx 格式，保持不变
+        } else if (path.startsWith("/") && path.length() >= 3 && path[2] == ':') {
+            // /D:/xxx 格式，去掉开头的 /
+            path = path.mid(1);
+        }
+        qDebug() << "Converted file URL to path:" << path;
+    }
+
     // 1. 检查 URL 格式
     if (!isValidUrl(url)) {
         QString error = "无效的 URL 格式，仅支持 http:// 和 https:// 协议";
@@ -99,11 +114,31 @@ QString DownloadEngine::addNewTask(const QString& url, const QString& localPath)
     qDebug() << "Parsed filename:" << fileName;
 
     // 4. 构建完整保存路径
-    QString savePath = localPath;
-    if (QFileInfo(localPath).isDir()) {
-        savePath = localPath + "/" + fileName;
+    QString savePath = path;
+    QFileInfo info(path);
+    qDebug() << "Input path:" << path;
+    qDebug() << "Input path exists:" << info.exists();
+    qDebug() << "Input path isDir:" << info.isDir();
+
+    // 优先判断是否为目录
+    // 方法1: 使用 QFileInfo::isDir()
+    // 方法2: 检查路径是否以常见目录分隔符结尾
+    // 方法3: 检查路径对应的目录是否存在
+    bool isDirectory = info.isDir();
+    if (!isDirectory) {
+        // 如果 QFileInfo 判断失败，尝试用 QDir 判断
+        QDir testDir(path);
+        if (testDir.exists() || path.endsWith("/") || path.endsWith("\\")) {
+            isDirectory = true;
+        }
     }
-    qDebug() << "Save path:" << savePath;
+
+    if (isDirectory) {
+        // 使用 QDir 构建跨平台兼容的路径
+        QDir dir(path);
+        savePath = dir.filePath(fileName);
+    }
+    qDebug() << "Final save path:" << savePath;
 
     // 5. 检查磁盘空间
     if (!checkDiskSpace(savePath)) {
@@ -332,6 +367,11 @@ void DownloadEngine::onFlushTimer() {
 }
 
 bool DownloadEngine::checkDiskSpace(const QString& path, qint64 requiredBytes) const {
+    // requiredBytes <= 0 不需要检查（文件已下载完成或无大小要求）
+    if (requiredBytes <= 0) {
+        return true;
+    }
+
     QFileInfo info(path);
     QStorageInfo storage(info.absolutePath());
 
@@ -340,12 +380,7 @@ bool DownloadEngine::checkDiskSpace(const QString& path, qint64 requiredBytes) c
     // 保留 100MB 缓冲
     const qint64 BUFFER = 100 * 1024 * 1024;
 
-    if (requiredBytes > 0) {
-        return (available - BUFFER) > requiredBytes;
-    }
-
-    // 默认检查至少 1GB 可用
-    return (available - BUFFER) > (1024 * 1024 * 1024);
+    return (available - BUFFER) > requiredBytes;
 }
 
 bool DownloadEngine::checkDuplicateTask(const QString& url) const {

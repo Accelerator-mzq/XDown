@@ -13,6 +13,9 @@
 #include <QCommandLineParser>
 #include <QTextStream>
 #include <QMessageLogger>
+#ifdef _WIN32
+#include <Windows.h>
+#endif
 
 #include "core/DownloadEngine.h"
 #include "gui/TaskListModel.h"
@@ -44,6 +47,11 @@ void customMessageHandler(QtMsgType type, const QMessageLogContext &context, con
 }
 
 int main(int argc, char *argv[]) {
+    // Windows 下设置控制台 UTF-8 编码，解决中文日志乱码
+    #ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+    #endif
+
     // 安装自定义消息处理器，将 qDebug 输出重定向到 stdout
     qInstallMessageHandler(customMessageHandler);
 

@@ -47,3 +47,8 @@ CTestTestfile.cmake
 # 日志输出
 stderr.txt
 stdout.txt
+
+# 测试截图和临时测试目录
+picture/
+tests/test_qt/
+tests/build/

@@ -115,7 +115,7 @@ Rectangle {
             }
         }
 
-        // 第三行: 大小信息
+        // 第三行: 大小信息和保存路径
         RowLayout {
             Layout.fillWidth: true
 
@@ -123,6 +123,15 @@ Rectangle {
                 text: model.downloadedSizeFormatted + " / " + model.totalSizeFormatted
                 font.pixelSize: 12
                 color: "#888888"
+            }
+
+            Text {
+                text: "保存至: " + model.localPath
+                font.pixelSize: 11
+                color: "#AAAAAA"
+                elide: Text.ElideLeft
+                Layout.fillWidth: true
+                Layout.leftMargin: 10
             }
 
             Item {

@@ -124,6 +124,18 @@ void HttpDownloader::start() {
             return;
         }
 
+        // 确保父目录存在
+        QFileInfo fileInfo(m_task.localPath);
+        QDir dir = fileInfo.absoluteDir();
+        if (!dir.exists()) {
+            if (!dir.mkpath(".")) {
+                m_task.status = TaskStatus::Error;
+                m_task.errorMessage = "无法创建目录: " + dir.path();
+                emit statusChanged(m_task.id, m_task.status, m_task.errorMessage);
+                return;
+            }
+        }
+
         // 打开文件 (追加模式支持断点续传)
         m_file = new QFile(m_task.localPath);
         QIODevice::OpenMode mode = QIODevice::WriteOnly;
@@ -158,6 +170,7 @@ void HttpDownloader::start() {
 
         // 发起异步 GET 请求
         qDebug() << "Creating GET request for URL:" << m_task.url;
+        qDebug() << "Saving file to localPath:" << m_task.localPath;
         qDebug() << "m_netManager is valid:" << (m_netManager != nullptr);
 
         // P0-2 修复: 先断开旧信号的连接，避免重定向时信号累积
@@ -293,9 +306,17 @@ void HttpDownloader::onFinished() {
 
     m_speedTimer->stop();
 
+    // 如果已经有错误状态，说明 onErrorOccurred 已经处理过了，不需要重复处理
+    if (m_task.status == TaskStatus::Error) {
+        qDebug() << "Error already handled by onErrorOccurred, skipping onFinished";
+        m_reply->deleteLater();
+        m_reply = nullptr;
+        return;
+    }
+
     // 检查 HTTP 状态码
     int statusCode = m_reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-    qDebug() << "HTTP status code:" << statusCode << "downloadedBytes:" << m_task.downloadedBytes;
+    qDebug() << "HTTP status code:" << statusCode << "downloadedBytes:" << m_task.downloadedBytes << "totalBytes:" << m_task.totalBytes;
 
     // ========== 断点续传检测: 检查服务器是否返回 206 ==========
     if (statusCode == 206) {
@@ -305,20 +326,49 @@ void HttpDownloader::onFinished() {
     } else if (statusCode == 200 && m_task.downloadedBytes > 0 && !m_isRedirecting) {
         // P1-3 修复: 200 OK - 服务器不支持断点续传
         // 如果之前发送了 Range 请求，说明服务器不支持断点续传
-        // 需要删除已下载的文件，重新从头开始下载
-        if (m_file && m_file->exists()) {
+        // 关键修复: 检查是否已经下载完成（downloadedBytes >= totalBytes）
+        // 如果文件已经下载完成，就不需要重新下载了！
+        if (m_task.totalBytes > 0 && m_task.downloadedBytes >= m_task.totalBytes) {
+            // 文件已经下载完成，不需要重新下载
+            qInfo() << "Download completed (200 OK, downloadedBytes >= totalBytes)";
+        } else if (m_file && m_file->exists()) {
+            // 需要删除已下载的文件，重新从头开始下载
             m_file->close();
             m_file->remove();
-            qWarning() << "Server does not support resume (200), deleting partial file and restarting";
+            qWarning() << "Server does not support resume (200), restarting download from beginning";
+            m_supportResume = false;
+            m_task.downloadedBytes = 0;
+
+            // 需要重新开始下载，不能直接标记为完成
+            m_reply->deleteLater();
+            m_reply = nullptr;
+
+            // 重新开始下载
+            start();
+            return;
         }
-        m_supportResume = false;
-        m_task.downloadedBytes = 0;
     }
 
     // 检查是否有错误
+    // 需要同时检查 Qt 网络错误和 HTTP 状态码
     if (m_reply->error() != QNetworkReply::NoError) {
         m_task.status = TaskStatus::Error;
         m_task.errorMessage = m_reply->errorString();
+        emit statusChanged(m_task.id, m_task.status, m_task.errorMessage);
+    } else if (statusCode >= 400) {
+        // HTTP 错误状态码 (400-599)
+        m_task.status = TaskStatus::Error;
+        QString errorMsg = QString("HTTP error %1").arg(statusCode);
+        if (statusCode == 429) {
+            errorMsg = "请求过于频繁，请稍后重试 (429)";
+        } else if (statusCode == 404) {
+            errorMsg = "文件不存在 (404)";
+        } else if (statusCode == 403) {
+            errorMsg = "无权限访问 (403)";
+        } else if (statusCode == 500) {
+            errorMsg = "服务器内部错误 (500)";
+        }
+        m_task.errorMessage = errorMsg;
         emit statusChanged(m_task.id, m_task.status, m_task.errorMessage);
     } else {
         // 下载完成
@@ -489,7 +539,9 @@ void HttpDownloader::parseFileName(const QUrl& redirectUrl) {
     if (!name.isEmpty()) {
         m_task.fileName = name;
         // 如果本地路径的文件名不同，更新本地路径
-        QString newPath = QFileInfo(m_task.localPath).absolutePath() + "/" + name;
+        // 使用 QDir 确保跨平台路径处理
+        QDir dir = QFileInfo(m_task.localPath).absoluteDir();
+        QString newPath = dir.filePath(name);
         if (newPath != m_task.localPath) {
             m_task.localPath = newPath;
         }

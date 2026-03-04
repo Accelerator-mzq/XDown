@@ -19,6 +19,7 @@
 
 #include "common/DownloadTask.h"
 #include "core/HttpDownloader.h"
+#include "core/DownloadEngine.h"
 
 // 测试统计结构
 struct STStats {
@@ -72,6 +73,12 @@ private slots:
     // ST-5.4: 写入权限测试
     void testWritePermission();
     void testWritePermission_data();
+
+    // ST-8.2: 重复 URL 检测测试
+    void testDuplicateUrlDetection();
+
+    // ST-5.3: 磁盘空间检查测试
+    void testDiskSpaceCheck();
 
     // ST-6.3: 特殊字符文件名测试
     void testSpecialCharFileName();
@@ -446,6 +453,110 @@ void TestSystemWorkflow::testWritePermission() {
     getStats()[getCurrentTest()].passed++;
 }
 
+// ST-8.2: 测试重复 URL 检测
+void TestSystemWorkflow::testDuplicateUrlDetection() {
+    getCurrentTest() = "ST-8.2";
+    if (getStats().find(getCurrentTest()) == getStats().end()) {
+        getStats()[getCurrentTest()] = {0, 0, "重复URL检测"};
+    }
+
+    fprintf(stderr, "testDuplicateUrlDetection: starting...\n");
+    fflush(stderr);
+
+    QTemporaryDir tempDir;
+    if (!tempDir.isValid()) {
+        fprintf(stderr, "ST-8.2 FAIL: tempDir invalid\n");
+        getStats()[getCurrentTest()].failed++;
+        return;
+    }
+
+    // 创建 DownloadEngine 实例
+    DownloadEngine engine;
+    QSignalSpy statusSpy(&engine, &DownloadEngine::taskStatusChanged);
+
+    // 第一个任务
+    QString url = "http://127.0.0.1:8080/file1.zip";
+    QString savePath = tempDir.path() + "/test1.zip";
+
+    fprintf(stderr, "testDuplicateUrlDetection: adding first task...\n");
+    fflush(stderr);
+
+    QString error1 = engine.addNewTask(url, savePath);
+    fprintf(stderr, "testDuplicateUrlDetection: first addNewTask result: %s\n",
+            qPrintable(error1.isEmpty() ? "success" : error1));
+    fflush(stderr);
+
+    // 第二个相同 URL 的任务（应该被拒绝）
+    QString savePath2 = tempDir.path() + "/test2.zip";
+    fprintf(stderr, "testDuplicateUrlDetection: adding duplicate task...\n");
+    fflush(stderr);
+
+    QString error2 = engine.addNewTask(url, savePath2);
+    fprintf(stderr, "testDuplicateUrlDetection: second addNewTask result: %s\n",
+            qPrintable(error2.isEmpty() ? "success" : error2));
+    fflush(stderr);
+
+    // 验证结果
+    if (error1.isEmpty() && !error2.isEmpty() && error2.contains("正在下载")) {
+        fprintf(stderr, "ST-8.2 PASS: 重复URL被正确拒绝, error: %s\n", qPrintable(error2));
+        fflush(stderr);
+        getStats()[getCurrentTest()].passed++;
+    } else {
+        fprintf(stderr, "ST-8.2 FAIL: 重复URL未被拒绝或逻辑错误\n");
+        fprintf(stderr, "  error1: %s, error2: %s\n", qPrintable(error1), qPrintable(error2));
+        fflush(stderr);
+        getStats()[getCurrentTest()].failed++;
+    }
+}
+
+// ST-5.3: 测试磁盘空间检查边界条件
+void TestSystemWorkflow::testDiskSpaceCheck() {
+    getCurrentTest() = "ST-5.3";
+    if (getStats().find(getCurrentTest()) == getStats().end()) {
+        getStats()[getCurrentTest()] = {0, 0, "磁盘空间检查"};
+    }
+
+    fprintf(stderr, "testDiskSpaceCheck: starting...\n");
+    fflush(stderr);
+
+    // 创建 DownloadEngine 实例来访问 checkDiskSpace
+    DownloadEngine engine;
+    QString testPath = "C:/Windows";  // 使用系统目录
+
+    // 测试1: requiredBytes = 0 (文件已完成的情况)
+    fprintf(stderr, "testDiskSpaceCheck: testing requiredBytes=0...\n");
+    fflush(stderr);
+    bool result1 = engine.checkDiskSpace(testPath, 0);
+    fprintf(stderr, "testDiskSpaceCheck: requiredBytes=0 result: %s\n", result1 ? "true" : "false");
+    fflush(stderr);
+
+    // 测试2: requiredBytes = -1 (无效值)
+    fprintf(stderr, "testDiskSpaceCheck: testing requiredBytes=-1...\n");
+    fflush(stderr);
+    bool result2 = engine.checkDiskSpace(testPath, -1);
+    fprintf(stderr, "testDiskSpaceCheck: requiredBytes=-1 result: %s\n", result2 ? "true" : "false");
+    fflush(stderr);
+
+    // 测试3: requiredBytes = 100 (正常值)
+    fprintf(stderr, "testDiskSpaceCheck: testing requiredBytes=100...\n");
+    fflush(stderr);
+    bool result3 = engine.checkDiskSpace(testPath, 100);
+    fprintf(stderr, "testDiskSpaceCheck: requiredBytes=100 result: %s\n", result3 ? "true" : "false");
+    fflush(stderr);
+
+    // 验证结果: requiredBytes <= 0 应该返回 true (不需要检查)
+    if (result1 && result2) {
+        fprintf(stderr, "ST-5.3 PASS: requiredBytes<=0 返回 true，未误报磁盘空间不足\n");
+        fflush(stderr);
+        getStats()[getCurrentTest()].passed++;
+    } else {
+        fprintf(stderr, "ST-5.3 FAIL: requiredBytes<=0 应返回 true，实际: result1=%d, result2=%d\n",
+                result1, result2);
+        fflush(stderr);
+        getStats()[getCurrentTest()].failed++;
+    }
+}
+
 // 测试数据准备 - 特殊字符文件名
 void TestSystemWorkflow::testSpecialCharFileName_data() {
     // 已废弃
@@ -582,6 +693,20 @@ void TestSystemWorkflow::runAllTests() {
     fprintf(stderr, "Running testWritePermission...\n");
     fflush(stderr);
     testWritePermission();
+
+    // 等待清理
+    QThread::msleep(500);
+    QCoreApplication::processEvents();
+
+    // ST-8.2: 重复 URL 检测测试
+    fprintf(stderr, "Running testDuplicateUrlDetection...\n");
+    fflush(stderr);
+    testDuplicateUrlDetection();
+
+    // ST-5.3: 磁盘空间检查测试
+    fprintf(stderr, "Running testDiskSpaceCheck...\n");
+    fflush(stderr);
+    testDiskSpaceCheck();
 
     // 打印测试统计
     printSTSummary();

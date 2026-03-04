@@ -74,9 +74,29 @@ endif()
 
 **技能调用方式 (在 PowerShell 中)：**
 `.\Run-Test.ps1 -Module <模块名> -Param "<参数>"`
-例如测试下载：`.\Run-Test.ps1 -Module net -Param "https://github.com/Accelerator-mzq/XDown/archive/refs/heads/main.zip"`
+例如测试下载：`.\Run-Test.ps1 -Module net -Param "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"`
 
 **技能反馈分析规则：**
 1. 脚本运行结束后，仔细阅读终端输出的日志。
 2. 如果日志末尾包含 `[TEST_RESULT: SUCCESS]`，说明测试通过，你可以向用户汇报成果。
 3. 如果日志末尾包含 `[TEST_RESULT: FAILED]`，代表你写的代码有 Bug 或遇到了重定向/超时等问题。你必须向上翻阅终端里的 `qDebug` 错误信息，自主修改 C++ 代码，重新编译 (`cmake --build build`)，并**再次调用该技能**，不断循环，直到看到 SUCCESS 为止。
+
+## 强制缺陷处理与测试闭环协议 (Defect Handling & Test-Driven Protocol)
+当用户手动测试发现了 Bug 并反馈给你时，**你绝对不允许仅仅修改代码就让用户自己去验证**。你必须严格执行以下完整的 QA 闭环流程，并在最终回复中按此结构输出报告：
+
+### 1. 缺陷修复 (Bug Fix)
+分析用户反馈，修改底层 C++ 或 QML 代码解决该问题。
+
+### 2. 测试覆盖率审查 (Coverage Analysis) - 双轨制
+你必须主动进行以下两层审查，并在回复中分别汇报：
+- **A. 系统级覆盖审查 (读取 docs/XDown_SystemTestCases_1.0.md)**：
+  检查该 Bug 的用户场景是否在系统测试用例文档中。如果属于漏测缺陷，你必须主动修改该 Markdown 文件，补充新的 ST 用例。
+- **B. 单元级覆盖审查 (直接读取 tests/ 目录下的 C++ 测试源码)**：
+  你必须去查阅 `tests/` 目录下相关的 `tst_*.cpp` 文件（例如报了数据库 Bug 就去查 `tst_dbmanager.cpp`）。
+  分析并回答：为什么之前的单元测试没有拦截到这个底层的逻辑/边界错误？如果是缺失了特定的断言 (Assert) 或边界条件 Mock，你必须直接在对应的 C++ 测试文件中补齐这个 Unit Test Case。
+
+### 3. 强制自动化测试实现 (Automated Test Implementation)
+对于该缺陷，你必须给出一个自动化测试方案，并尝试落实到代码中：
+- 优先在 `tests/` 目录下编写对应的 C++ QtTest 单元测试，或补充到无头命令行测试模式中。
+- 编写完成后，你必须自己调用 `Run-Test.ps1` 或 `ctest` 跑通该测试，证明 Bug 已被修复。
+- **豁免条款**：如果该 Bug 属于纯粹的视觉 UI 问题（如颜色不对、弹窗位置偏移、QML 渲染错位），无法通过无头模式和 C++ 断言完成自动化测试，你必须在回复中明确说明：“**无法完成自动化测试，原因：[具体的技术限制]**”，并提供详细的手动验证步骤。
