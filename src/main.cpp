@@ -113,11 +113,20 @@ int main(int argc, char *argv[]) {
             out.flush();
         });
 
+        // P2-7 修复: 合并状态变化和错误处理的信号连接
         // 连接信号: 状态变化
         QObject::connect(&engine, &DownloadEngine::taskStatusChanged,
                          [&](const QString& id, TaskStatus status, const QString& errorMessage) {
             out << "状态变化: id=" << id << " status=" << (int)status << " msg=" << errorMessage << Qt::endl;
             out.flush();
+
+            // 处理错误退出
+            if (status == TaskStatus::Error) {
+                out << "=== 下载失败 ===" << Qt::endl;
+                out << "错误信息:" << errorMessage << Qt::endl;
+                out.flush();
+                QCoreApplication::exit(1);
+            }
         });
 
         // 连接信号: 下载完成
@@ -127,17 +136,6 @@ int main(int argc, char *argv[]) {
             out << "文件保存至:" << localPath << Qt::endl;
             out.flush();
             QCoreApplication::exit(0);
-        });
-
-        // 连接信号: 下载错误
-        QObject::connect(&engine, &DownloadEngine::taskStatusChanged,
-                         [&](const QString& id, TaskStatus status, const QString& errorMessage) {
-            if (status == TaskStatus::Error) {
-                out << "=== 下载失败 ===" << Qt::endl;
-                out << "错误信息:" << errorMessage << Qt::endl;
-                out.flush();
-                QCoreApplication::exit(1);
-            }
         });
 
         // 添加下载任务

@@ -236,8 +236,10 @@ private:
     QMap<QString, DownloadTask> m_tasks;                  // 任务缓存
     QQueue<DownloadTask> m_waitingQueue;                   // 等待队列
 
-    // 节流写入
-    QMap<QString, QPair<qint64, qint64>> m_pendingUpdates; // 待写入的进度更新
+    // 节流写入: QMap<id, QPair<downloaded, total>>
+    QMap<QString, QPair<qint64, qint64>> m_pendingUpdates;
+    // P1-4: 单独的速度节流: QMap<id, speed>
+    QMap<QString, qint64> m_pendingSpeedUpdates;
     QTimer* m_flushTimer;                                  // 写入定时器 (2秒)
     static const int FLUSH_INTERVAL = 2000;                // 写入间隔 (毫秒)
 

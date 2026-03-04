@@ -153,6 +153,12 @@ void DownloadEngine::pauseTask(const QString& id) {
         downloader->pause();
         m_activeDownloaders.remove(id);
 
+        // P1-2 修复: 同时更新内存中的任务状态
+        auto it = m_tasks.find(id);
+        if (it != m_tasks.end()) {
+            it->status = TaskStatus::Paused;
+        }
+
         // 更新数据库
         DBManager::instance().updateTaskStatus(id, TaskStatus::Paused);
 
@@ -284,6 +290,10 @@ void DownloadEngine::onDownloaderStatusChanged(const QString& id, TaskStatus sta
 void DownloadEngine::onDownloadFinished(const QString& id, const QString& localPath) {
     qInfo() << "Download finished:" << id << "->" << localPath;
 
+    // P1-1 修复: 只转发信号和更新内存数据
+    // 注意: 不再这里处理队列，因为 onDownloaderStatusChanged 已经处理了
+    // 避免 processWaitingQueue() 被调用两次导致队列异常
+
     // 转发下载完成信号到外部
     emit downloadFinished(id, localPath);
 
@@ -294,18 +304,13 @@ void DownloadEngine::onDownloadFinished(const QString& id, const QString& localP
         it->speedBytesPerSec = 0;
     }
 
-    // 移除活跃下载器
-    auto* downloader = m_activeDownloaders.take(id);
-    if (downloader) {
-        downloader->deleteLater();
-    }
-
-    // 处理等待队列
-    processWaitingQueue();
+    // 注意: 活跃下载器的移除和队列处理在 onDownloaderStatusChanged 中统一处理
+    // 这里不再重复处理，避免 P1-1 问题
 }
 
 void DownloadEngine::onFlushTimer() {
-    // 批量写入待更新的任务进度到数据库
+    // P1-4 修复: 批量写入待更新的任务进度和速度到数据库
+    // 进度写入
     for (auto it = m_pendingUpdates.begin(); it != m_pendingUpdates.end(); ++it) {
         const QString& id = it.key();
         qint64 downloaded = it.value().first;
@@ -318,6 +323,12 @@ void DownloadEngine::onFlushTimer() {
         }
     }
     m_pendingUpdates.clear();
+
+    // 速度写入 (每2秒批量写入一次，避免频繁写库)
+    for (auto it = m_pendingSpeedUpdates.begin(); it != m_pendingSpeedUpdates.end(); ++it) {
+        DBManager::instance().updateTaskSpeed(it.key(), it.value());
+    }
+    m_pendingSpeedUpdates.clear();
 }
 
 bool DownloadEngine::checkDiskSpace(const QString& path, qint64 requiredBytes) const {
@@ -338,14 +349,24 @@ bool DownloadEngine::checkDiskSpace(const QString& path, qint64 requiredBytes) c
 }
 
 bool DownloadEngine::checkDuplicateTask(const QString& url) const {
-    // 检查下载中的任务
+    // P2-2 修复: 检查下载中/等待中的任务 (排除已完成、暂停、错误)
+    // 这些状态的任务都在"处理中"，不应允许重复添加
+
+    // 检查数据库中的活跃任务
     if (DBManager::instance().hasDuplicateDownloadingTask(url)) {
         return true;
     }
 
-    // 检查内存中的活跃任务
+    // 检查内存中的活跃任务 (Downloading 或 Waiting)
     for (const auto& task : m_tasks.values()) {
-        if (task.url == url && task.status == TaskStatus::Downloading) {
+        if (task.url == url && (task.status == TaskStatus::Downloading || task.status == TaskStatus::Waiting)) {
+            return true;
+        }
+    }
+
+    // 也检查等待队列中的任务
+    for (const auto& task : m_waitingQueue) {
+        if (task.url == url) {
             return true;
         }
     }
@@ -411,9 +432,7 @@ void DownloadEngine::enqueueWaitingTask(const DownloadTask& task) {
 
 void DownloadEngine::saveTaskProgressThrottled(const QString& id, qint64 downloaded,
                                                qint64 total, qint64 speed) {
-    // 只保存到待写入队列，由定时器批量写入
+    // P1-4 修复: 进度和速度都进行节流，每2秒批量写入数据库
     m_pendingUpdates.insert(id, qMakePair(downloaded, total));
-
-    // 同时更新速度 (这个可以实时写入，不影响性能)
-    DBManager::instance().updateTaskSpeed(id, speed);
+    m_pendingSpeedUpdates.insert(id, speed);  // 速度也加入节流
 }

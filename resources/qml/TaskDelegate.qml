@@ -11,7 +11,8 @@ import QtQuick.Layouts
 Rectangle {
     id: root
     width: parent.width
-    height: 80
+    // P2-1 修复: 隐藏时高度设为0，避免列表中出现空白区域
+    height: visible ? 80 : 0
     radius: 8
     color: "white"
 
@@ -30,6 +31,11 @@ Rectangle {
             // 已完成: 只显示完成的
             return taskStatus === 3
         }
+    }
+
+    // P2-1 修复: 动画效果
+    Behavior on height {
+        NumberAnimation { duration: 200 }
     }
 
     signal pauseClicked(string id)
