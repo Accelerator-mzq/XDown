@@ -87,6 +87,19 @@ public:
     bool deleteTask(const QString& id);
 
     /**
+     * @brief 根据ID查询任务
+     * @param id 任务ID
+     * @return 查询到的任务（未找到时返回空任务）
+     */
+    DownloadTask getTaskById(const QString& id) const;
+
+    /**
+     * @brief 清空所有任务
+     * @return 是否成功
+     */
+    bool clearAll();
+
+    /**
      * @brief 更新任务速度
      * @param id 任务ID
      * @param speedBytesPerSec 当前速度

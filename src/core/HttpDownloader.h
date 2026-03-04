@@ -20,6 +20,7 @@
 #include <QFile>
 #include <QTimer>
 #include <QThread>
+#include <QEventLoop>
 #include "common/DownloadTask.h"
 
 /**
@@ -175,6 +176,7 @@ private:
     int m_redirectCount;                    // 重定向次数 (防止无限重定向)
 
     QTimer* m_speedTimer;                    // 速度计算定时器
+    QEventLoop* m_eventLoop;                 // 工作线程事件循环
 
     static const int BUFFER_SIZE = 65536;    // 64KB 缓冲区
     static const int MAX_REDIRECTS = 10;     // 最大重定向次数

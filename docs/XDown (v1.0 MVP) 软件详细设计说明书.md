@@ -104,6 +104,10 @@ public:
     bool hasDuplicateDownloadingTask(const QString& url) const;
     bool deleteTask(const QString& id);
 
+    // ========== 新增方法 ==========
+    DownloadTask getTaskById(const QString& id) const;  // 根据ID查询任务
+    bool clearAll();  // 清空所有任务
+
 signals:
     void taskInserted(const DownloadTask& task);
     void taskProgressUpdated(const QString& id, qint64 downloaded, qint64 total);
@@ -156,6 +160,7 @@ QString sql = R"(
 3. **断点续传**：检测 HTTP 206 状态码
 4. **重定向处理**：支持 301/302/307/308
 5. **速度计算**：每秒计算瞬时速度
+6. **线程模型优化**：使用 `requestInterruption()` 优雅退出，避免阻塞
 
 ### 3.2 类声明 (`HttpDownloader.h`)
 ```cpp
@@ -203,6 +208,7 @@ private:
     bool m_supportResume;
     int m_redirectCount;
     QTimer* m_speedTimer;
+    QEventLoop* m_eventLoop;  // 工作线程事件循环 (新增)
 
     static const int BUFFER_SIZE = 65536;     // 64KB 缓冲区
     static const int MAX_REDIRECTS = 10;
@@ -287,6 +293,36 @@ void HttpDownloader::updateSpeedStatistic() {
 
     emit progressUpdated(m_task.id, m_task.downloadedBytes,
                        m_task.totalBytes, m_currentSpeed);
+}
+```
+
+**3.3.4 线程模型优化** (解决 Qt Test 兼容性)：
+```cpp
+void HttpDownloader::initNetworkManager() {
+    // 在工作线程中创建网络管理器
+    m_netManager = new QNetworkAccessManager(this);
+    m_speedTimer = new QTimer(this);
+    // ... 初始化代码 ...
+
+    // 不再使用阻塞的事件循环，改用 QThread::msleep 轮询
+    // 这样可以允许信号槽正常处理
+    while (!m_thread->isInterruptionRequested()) {
+        QThread::msleep(100);
+        QCoreApplication::processEvents();
+    }
+}
+
+void HttpDownloader::stop() {
+    // 使用 requestInterruption() 标记线程需要中断
+    if (m_thread) {
+        m_thread->requestInterruption();
+    }
+
+    // 使用 Qt::QueuedConnection 确保异步执行
+    QMetaObject::invokeMethod(this, [this]() {
+        pause();
+        // ... 清理代码 ...
+    }, Qt::QueuedConnection);
 }
 ```
 

@@ -29,9 +29,15 @@ target_include_directories(test_downloadtask PRIVATE
     ${XDOWN_ROOT_DIR}/src
 )
 
+# 添加 DBManager 源文件进行编译
+target_sources(test_downloadtask PRIVATE
+    ${XDOWN_ROOT_DIR}/src/core/DBManager.cpp
+)
+
 target_link_libraries(test_downloadtask PRIVATE
     Qt6::Core
     Qt6::Test
+    Qt6::Sql
 )
 
 add_test(NAME DownloadTaskTest COMMAND test_downloadtask)
@@ -71,3 +77,25 @@ target_link_libraries(test_systemtest PRIVATE
 )
 
 add_test(NAME SystemTest COMMAND test_systemtest)
+
+# 简化的 HTTP 测试
+qt_add_executable(tst_httptest tst_httptest.cpp)
+
+target_include_directories(tst_httptest PRIVATE
+    ${XDOWN_ROOT_DIR}/src
+)
+
+target_sources(tst_httptest PRIVATE
+    ${XDOWN_ROOT_DIR}/src/core/DBManager.cpp
+    ${XDOWN_ROOT_DIR}/src/core/HttpDownloader.cpp
+    ${XDOWN_ROOT_DIR}/src/core/DownloadEngine.cpp
+    ${XDOWN_ROOT_DIR}/src/gui/TaskListModel.cpp
+)
+
+target_link_libraries(tst_httptest PRIVATE
+    Qt6::Core
+    Qt6::Test
+    Qt6::Network
+    Qt6::Sql
+)
+

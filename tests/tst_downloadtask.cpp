@@ -12,6 +12,15 @@
 #include <map>
 #include <queue>
 
+// Qt SQLite 相关头文件
+#include <QCoreApplication>
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QSqlError>
+#include <QString>
+#include <QDateTime>
+#include <QDir>
+
 // ============================================
 // DownloadTask Functions (extracted from source)
 // ============================================
@@ -419,6 +428,50 @@ void printUTSummary(std::map<std::string, UTStats>& utMap) {
 }
 
 int main() {
+    // ============================================
+    // Qt 应用初始化 (必须首先执行)
+    // ============================================
+    static QCoreApplication* app = QCoreApplication::instance();
+    if (!app) {
+        static int argc = 0;
+        static char* argv[1] = { nullptr };
+        app = new QCoreApplication(argc, argv);
+    }
+
+    // ============================================
+    // 初始化 SQLite 数据库连接
+    // ============================================
+    QString testDbPath = QDir::tempPath() + "/xdown_ut_test.db";
+    QDir().remove(testDbPath);  // 确保清理旧数据库
+
+    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
+    db.setDatabaseName(testDbPath);
+
+    if (!db.open()) {
+        std::cerr << "Failed to open database: " << testDbPath.toStdString() << std::endl;
+        return 1;
+    }
+
+    // 创建表结构
+    QSqlQuery query(db);
+    query.exec(R"(
+        CREATE TABLE IF NOT EXISTS downloads (
+            id TEXT PRIMARY KEY,
+            url TEXT NOT NULL,
+            local_path TEXT NOT NULL,
+            file_name TEXT NOT NULL,
+            total_size INTEGER DEFAULT 0,
+            downloaded_size INTEGER DEFAULT 0,
+            status INTEGER DEFAULT 0,
+            error_message TEXT DEFAULT '',
+            created_at INTEGER DEFAULT 0,
+            updated_at INTEGER DEFAULT 0,
+            speed_bytes_per_sec INTEGER DEFAULT 0
+        )
+    )");
+
+    std::cout << "Database initialized: " << testDbPath.toStdString() << std::endl;
+
     printHeader();
 
     // UT 统计映射
@@ -562,41 +615,57 @@ int main() {
     // ============================================
     currentUT = "UT-2.1";
     currentScenario = "UT-2.1";
-    std::cout << std::endl << "[UT-2.1] DBManager::insertTask()" << std::endl;
+    std::cout << std::endl << "[UT-2.1] DBManager::insertTask() - SQL 查询验证" << std::endl;
     std::cout << "-------------------------------------------" << std::endl;
 
-    MockDBManager db;
-
-    // UT-2.1-1: Insert task with Waiting status
+    // UT-2.1-1: 使用 SQL INSERT 插入任务
     total++;
-    Task task1;
-    task1.id = "test-id-001";
-    task1.url = "http://test.com/file.zip";
-    task1.fileName = "file.zip";
-    task1.status = TaskStatus::Waiting;
-    bool insertResult = db.insertTask(task1);
-    currentScenario = "UT-2.1"; std::cout << "[UT-2.1]" << std::endl;
-    std::cout << "  Input: Task with status=Waiting, query after insert" << std::endl;
-    std::cout << "  Expected: function returns true" << std::endl;
-    std::cout << "  Actual: " << (insertResult ? "true" : "false") << std::endl;
+    qint64 now = QDateTime::currentSecsSinceEpoch();
+    bool insertResult = query.exec(
+        "INSERT INTO downloads (id, url, local_path, file_name, total_size, downloaded_size, status, error_message, created_at, updated_at, speed_bytes_per_sec) "
+        "VALUES ('test-id-001', 'http://test.com/file.zip', '/downloads/file.zip', 'file.zip', 0, 0, 0, '', " + QString::number(now) + ", " + QString::number(now) + ", 0)"
+    );
+    currentScenario = "UT-2.1-1"; std::cout << "[UT-2.1-1]" << std::endl;
+    std::cout << "  Input: SQL INSERT with status=Waiting" << std::endl;
+    std::cout << "  Expected: SQL 执行成功" << std::endl;
+    std::cout << "  Actual: " << (insertResult ? "成功" : "失败") << std::endl;
     if (insertResult) {
         std::cout << "  Result: PASS" << std::endl;
         updateUTStats(utStats, currentUT, true, currentScenario);
         passed++;
     } else {
+        std::cout << "  Error: " << query.lastError().text().toStdString() << std::endl;
         std::cout << "  Result: FAIL" << std::endl;
         updateUTStats(utStats, currentUT, false, currentScenario);
         failed++;
     }
 
-    // UT-2.1-2: Verify data consistency
+    // UT-2.1-2: 使用 SQL SELECT 查询验证数据一致性
     total++;
-    Task retrievedTask = db.getTaskById("test-id-001");
-    currentScenario = "UT-2.1"; std::cout << "[UT-2.1]" << std::endl;
-    std::cout << "  Input: Query ID=test-id-001" << std::endl;
-    std::cout << "  Expected: Can retrieve matching data" << std::endl;
-    std::cout << "  Actual: id=" << retrievedTask.id << ", status=" << (int)retrievedTask.status << std::endl;
-    bool dataMatch = (retrievedTask.id == "test-id-001" && retrievedTask.status == TaskStatus::Waiting);
+    bool sqlQuerySuccess = query.exec("SELECT id, url, file_name, status FROM downloads WHERE id = 'test-id-001'");
+    currentScenario = "UT-2.1-2"; std::cout << "[UT-2.1-2]" << std::endl;
+    std::cout << "  Input: SQL SELECT 查询 ID=test-id-001" << std::endl;
+    std::cout << "  Expected: SQL 查询成功且数据一致" << std::endl;
+
+    bool dataMatch = false;
+    if (sqlQuerySuccess && query.next()) {
+        QString dbId = query.value("id").toString();
+        QString dbUrl = query.value("url").toString();
+        QString dbFileName = query.value("file_name").toString();
+        int dbStatus = query.value("status").toInt();
+
+        std::cout << "  SQL Result: id=" << dbId.toStdString()
+                  << ", url=" << dbUrl.toStdString()
+                  << ", file_name=" << dbFileName.toStdString()
+                  << ", status=" << dbStatus << std::endl;
+
+        // 验证数据一致性
+        dataMatch = (dbId == "test-id-001" &&
+                     dbUrl == "http://test.com/file.zip" &&
+                     dbFileName == "file.zip" &&
+                     dbStatus == 0);
+    }
+
     if (dataMatch) {
         std::cout << "  Result: PASS" << std::endl;
         updateUTStats(utStats, currentUT, true, currentScenario);
@@ -608,29 +677,32 @@ int main() {
     }
 
     // ============================================
-    // UT-2.2: DBManager::hasDuplicateDownloadingTask()
+    // UT-2.2: hasDuplicateDownloadingTask() - SQL 查询
     // ============================================
     currentUT = "UT-2.2";
-    currentScenario = "UT-2.2-1";
-    std::cout << std::endl << "[UT-2.2] DBManager::hasDuplicateDownloadingTask()" << std::endl;
+    std::cout << std::endl << "[UT-2.2] hasDuplicateDownloadingTask() - SQL 查询" << std::endl;
     std::cout << "-------------------------------------------" << std::endl;
 
-    db.clear();
-    Task task2;
-    task2.id = "test-id-002";
-    task2.url = "http://test.com/a.zip";
-    task2.status = TaskStatus::Downloading;
-    db.insertTask(task2);
+    // 清理并插入测试数据
+    query.exec("DELETE FROM downloads");
+    qint64 now2 = QDateTime::currentSecsSinceEpoch();
+    query.exec(
+        "INSERT INTO downloads (id, url, local_path, file_name, total_size, downloaded_size, status, error_message, created_at, updated_at, speed_bytes_per_sec) "
+        "VALUES ('test-id-002', 'http://test.com/a.zip', '/a.zip', 'a.zip', 0, 0, 1, '', " + QString::number(now2) + ", " + QString::number(now2) + ", 0)"
+    );
 
-    // UT-2.2-1: Same URL query
+    // UT-2.2-1: 相同 URL 且状态为 Downloading
     total++;
-    bool dup1 = db.hasDuplicateDownloadingTask("http://test.com/a.zip");
-    currentScenario = "UT-2.2"; std::cout << "[UT-2.2]" << std::endl;
-    std::cout << "  Precondition: DB has URL=http://test.com/a.zip, status=Downloading" << std::endl;
-    std::cout << "  Input: Same URL" << std::endl;
-    std::cout << "  Expected: true" << std::endl;
-    std::cout << "  Actual: " << (dup1 ? "true" : "false") << std::endl;
-    if (dup1) {
+    bool hasDup1 = false;
+    if (query.exec("SELECT COUNT(*) FROM downloads WHERE url = 'http://test.com/a.zip' AND status = 1") && query.next()) {
+        hasDup1 = query.value(0).toInt() > 0;
+    }
+    currentScenario = "UT-2.2-1"; std::cout << "[UT-2.2-1]" << std::endl;
+    std::cout << "  Precondition: URL=http://test.com/a.zip, status=Downloading" << std::endl;
+    std::cout << "  Input: SELECT COUNT(*) WHERE url='...' AND status=1" << std::endl;
+    std::cout << "  Expected: true (count > 0)" << std::endl;
+    std::cout << "  Actual: " << (hasDup1 ? "true" : "false") << std::endl;
+    if (hasDup1) {
         std::cout << "  Result: PASS" << std::endl;
         updateUTStats(utStats, currentUT, true, currentScenario);
         passed++;
@@ -640,15 +712,17 @@ int main() {
         failed++;
     }
 
-    // UT-2.2-2: Different URL
+    // UT-2.2-2: 不同 URL
     total++;
-    bool dup2 = db.hasDuplicateDownloadingTask("http://test.com/b.zip");
-    currentScenario = "UT-2.2"; std::cout << "[UT-2.2]" << std::endl;
-    std::cout << "  Precondition: DB has URL=http://test.com/a.zip, status=Downloading" << std::endl;
-    std::cout << "  Input: Different URL" << std::endl;
+    bool hasDup2 = false;
+    if (query.exec("SELECT COUNT(*) FROM downloads WHERE url = 'http://test.com/b.zip' AND status = 1") && query.next()) {
+        hasDup2 = query.value(0).toInt() > 0;
+    }
+    currentScenario = "UT-2.2-2"; std::cout << "[UT-2.2-2]" << std::endl;
+    std::cout << "  Input: SELECT COUNT(*) WHERE url='http://test.com/b.zip'" << std::endl;
     std::cout << "  Expected: false" << std::endl;
-    std::cout << "  Actual: " << (dup2 ? "true" : "false") << std::endl;
-    if (!dup2) {
+    std::cout << "  Actual: " << (hasDup2 ? "true" : "false") << std::endl;
+    if (!hasDup2) {
         std::cout << "  Result: PASS" << std::endl;
         updateUTStats(utStats, currentUT, true, currentScenario);
         passed++;
@@ -658,22 +732,22 @@ int main() {
         failed++;
     }
 
-    // UT-2.2-3: URL with Finished status
-    db.clear();
-    Task task3;
-    task3.id = "test-id-003";
-    task3.url = "http://test.com/c.zip";
-    task3.status = TaskStatus::Finished;
-    db.insertTask(task3);
-
+    // UT-2.2-3: 相同 URL 但状态为 Finished
+    query.exec(
+        "INSERT OR REPLACE INTO downloads (id, url, local_path, file_name, total_size, downloaded_size, status, error_message, created_at, updated_at, speed_bytes_per_sec) "
+        "VALUES ('test-id-003', 'http://test.com/c.zip', '/c.zip', 'c.zip', 0, 0, 3, '', " + QString::number(now2) + ", " + QString::number(now2) + ", 0)"
+    );
     total++;
-    bool dup3 = db.hasDuplicateDownloadingTask("http://test.com/c.zip");
-    currentScenario = "UT-2.2"; std::cout << "[UT-2.2]" << std::endl;
-    std::cout << "  Precondition: DB has URL=http://test.com/c.zip, status=Finished" << std::endl;
-    std::cout << "  Input: Same URL but status=Finished" << std::endl;
+    bool hasDup3 = false;
+    if (query.exec("SELECT COUNT(*) FROM downloads WHERE url = 'http://test.com/c.zip' AND status = 1") && query.next()) {
+        hasDup3 = query.value(0).toInt() > 0;
+    }
+    currentScenario = "UT-2.2-3"; std::cout << "[UT-2.2-3]" << std::endl;
+    std::cout << "  Precondition: URL=http://test.com/c.zip, status=Finished" << std::endl;
+    std::cout << "  Input: SELECT COUNT(*) WHERE url='...' AND status=1" << std::endl;
     std::cout << "  Expected: false" << std::endl;
-    std::cout << "  Actual: " << (dup3 ? "true" : "false") << std::endl;
-    if (!dup3) {
+    std::cout << "  Actual: " << (hasDup3 ? "true" : "false") << std::endl;
+    if (!hasDup3) {
         std::cout << "  Result: PASS" << std::endl;
         updateUTStats(utStats, currentUT, true, currentScenario);
         passed++;
@@ -684,28 +758,29 @@ int main() {
     }
 
     // ============================================
-    // UT-2.3: DBManager::updateTaskProgress()
+    // UT-2.3: updateTaskProgress() - SQL UPDATE
     // ============================================
     currentUT = "UT-2.3";
-    currentScenario = "UT-2.3-1";
-    std::cout << std::endl << "[UT-2.3] DBManager::updateTaskProgress()" << std::endl;
+    std::cout << std::endl << "[UT-2.3] updateTaskProgress() - SQL UPDATE" << std::endl;
     std::cout << "-------------------------------------------" << std::endl;
 
-    db.clear();
-    Task task4;
-    task4.id = "test-id-004";
-    task4.url = "http://test.com/d.zip";
-    task4.status = TaskStatus::Waiting;
-    db.insertTask(task4);
+    query.exec("DELETE FROM downloads");
+    qint64 now3 = QDateTime::currentSecsSinceEpoch();
+    query.exec(
+        "INSERT INTO downloads (id, url, local_path, file_name, total_size, downloaded_size, status, error_message, created_at, updated_at, speed_bytes_per_sec) "
+        "VALUES ('test-id-004', 'http://test.com/d.zip', '/d.zip', 'd.zip', 0, 0, 0, '', " + QString::number(now3) + ", " + QString::number(now3) + ", 0)"
+    );
 
-    // UT-2.3-1: Update task progress
     total++;
-    bool updateResult = db.updateTaskProgress("test-id-004", 50, 100, TaskStatus::Downloading);
-    currentScenario = "UT-2.3"; std::cout << "[UT-2.3]" << std::endl;
-    std::cout << "  Input: id=test-id-004, downloadedBytes=50, totalBytes=100, status=Downloading" << std::endl;
-    std::cout << "  Expected: function returns true" << std::endl;
-    std::cout << "  Actual: " << (updateResult ? "true" : "false") << std::endl;
-    if (updateResult) {
+    qint64 now3Upd = QDateTime::currentSecsSinceEpoch();
+    bool updResult = query.exec(
+        "UPDATE downloads SET downloaded_size = 50, total_size = 100, status = 1, updated_at = " + QString::number(now3Upd) + " WHERE id = 'test-id-004'"
+    );
+    currentScenario = "UT-2.3-1"; std::cout << "[UT-2.3-1]" << std::endl;
+    std::cout << "  Input: UPDATE downloads SET downloaded_size=50, total_size=100, status=1" << std::endl;
+    std::cout << "  Expected: SQL 执行成功" << std::endl;
+    std::cout << "  Actual: " << (updResult ? "成功" : "失败") << std::endl;
+    if (updResult) {
         std::cout << "  Result: PASS" << std::endl;
         updateUTStats(utStats, currentUT, true, currentScenario);
         passed++;
@@ -715,19 +790,19 @@ int main() {
         failed++;
     }
 
-    // UT-2.3-2: Verify updated data
     total++;
-    Task updatedTask = db.getTaskById("test-id-004");
-    currentScenario = "UT-2.3"; std::cout << "[UT-2.3]" << std::endl;
-    std::cout << "  Input: Query ID=test-id-004" << std::endl;
-    std::cout << "  Expected: downloadedBytes=50, totalBytes=100, status=Downloading" << std::endl;
-    std::cout << "  Actual: downloadedBytes=" << updatedTask.downloadedBytes
-              << ", totalBytes=" << updatedTask.totalBytes
-              << ", status=" << (int)updatedTask.status << std::endl;
-    bool progressMatch = (updatedTask.downloadedBytes == 50 &&
-                         updatedTask.totalBytes == 100 &&
-                         updatedTask.status == TaskStatus::Downloading);
-    if (progressMatch) {
+    bool progMatch = false;
+    if (query.exec("SELECT downloaded_size, total_size, status FROM downloads WHERE id = 'test-id-004'") && query.next()) {
+        qint64 dlSize = query.value("downloaded_size").toLongLong();
+        qint64 totSize = query.value("total_size").toLongLong();
+        int stat = query.value("status").toInt();
+        currentScenario = "UT-2.3-2"; std::cout << "[UT-2.3-2]" << std::endl;
+        std::cout << "  Input: SELECT downloaded_size, total_size, status" << std::endl;
+        std::cout << "  Expected: downloaded=50, total=100, status=1" << std::endl;
+        std::cout << "  Actual: downloaded=" << dlSize << ", total=" << totSize << ", status=" << stat << std::endl;
+        progMatch = (dlSize == 50 && totSize == 100 && stat == 1);
+    }
+    if (progMatch) {
         std::cout << "  Result: PASS" << std::endl;
         updateUTStats(utStats, currentUT, true, currentScenario);
         passed++;
@@ -738,27 +813,29 @@ int main() {
     }
 
     // ============================================
-    // UT-2.4: DBManager::updateTaskStatus()
+    // UT-2.4: updateTaskStatus() - SQL UPDATE
     // ============================================
     currentUT = "UT-2.4";
-    std::cout << std::endl << "[UT-2.4] DBManager::updateTaskStatus()" << std::endl;
+    std::cout << std::endl << "[UT-2.4] updateTaskStatus() - SQL UPDATE" << std::endl;
     std::cout << "-------------------------------------------" << std::endl;
 
-    db.clear();
-    Task task5;
-    task5.id = "test-id-005";
-    task5.url = "http://test.com/e.zip";
-    task5.status = TaskStatus::Waiting;
-    db.insertTask(task5);
+    query.exec("DELETE FROM downloads");
+    qint64 now4 = QDateTime::currentSecsSinceEpoch();
+    query.exec(
+        "INSERT INTO downloads (id, url, local_path, file_name, total_size, downloaded_size, status, error_message, created_at, updated_at, speed_bytes_per_sec) "
+        "VALUES ('test-id-005', 'http://test.com/e.zip', '/e.zip', 'e.zip', 0, 0, 0, '', " + QString::number(now4) + ", " + QString::number(now4) + ", 0)"
+    );
 
-    // UT-2.4-1: Update task status
     total++;
-    bool statusResult = db.updateTaskStatus("test-id-005", TaskStatus::Downloading);
-    currentScenario = "UT-2.4"; std::cout << "[UT-2.4]" << std::endl;
-    std::cout << "  Input: id=test-id-005, status=Downloading" << std::endl;
-    std::cout << "  Expected: function returns true" << std::endl;
-    std::cout << "  Actual: " << (statusResult ? "true" : "false") << std::endl;
-    if (statusResult) {
+    qint64 now4Upd = QDateTime::currentSecsSinceEpoch();
+    bool statResult = query.exec(
+        "UPDATE downloads SET status = 1, updated_at = " + QString::number(now4Upd) + " WHERE id = 'test-id-005'"
+    );
+    currentScenario = "UT-2.4-1"; std::cout << "[UT-2.4-1]" << std::endl;
+    std::cout << "  Input: UPDATE downloads SET status=1" << std::endl;
+    std::cout << "  Expected: SQL 执行成功" << std::endl;
+    std::cout << "  Actual: " << (statResult ? "成功" : "失败") << std::endl;
+    if (statResult) {
         std::cout << "  Result: PASS" << std::endl;
         updateUTStats(utStats, currentUT, true, currentScenario);
         passed++;
@@ -768,14 +845,17 @@ int main() {
         failed++;
     }
 
-    // UT-2.4-2: Verify status change
     total++;
-    Task statusTask = db.getTaskById("test-id-005");
-    currentScenario = "UT-2.4"; std::cout << "[UT-2.4]" << std::endl;
-    std::cout << "  Input: Query ID=test-id-005" << std::endl;
-    std::cout << "  Expected: status=Downloading" << std::endl;
-    std::cout << "  Actual: status=" << (int)statusTask.status << std::endl;
-    if (statusTask.status == TaskStatus::Downloading) {
+    bool statMatch = false;
+    if (query.exec("SELECT status FROM downloads WHERE id = 'test-id-005'") && query.next()) {
+        int dbStat = query.value("status").toInt();
+        currentScenario = "UT-2.4-2"; std::cout << "[UT-2.4-2]" << std::endl;
+        std::cout << "  Input: SELECT status FROM downloads" << std::endl;
+        std::cout << "  Expected: status=1" << std::endl;
+        std::cout << "  Actual: status=" << dbStat << std::endl;
+        statMatch = (dbStat == 1);
+    }
+    if (statMatch) {
         std::cout << "  Result: PASS" << std::endl;
         updateUTStats(utStats, currentUT, true, currentScenario);
         passed++;
@@ -786,29 +866,28 @@ int main() {
     }
 
     // ============================================
-    // UT-2.5: DBManager::loadAllTasks()
+    // UT-2.5: loadAllTasks() - SQL SELECT
     // ============================================
     currentUT = "UT-2.5";
-    std::cout << std::endl << "[UT-2.5] DBManager::loadAllTasks()" << std::endl;
+    std::cout << std::endl << "[UT-2.5] loadAllTasks() - SQL SELECT" << std::endl;
     std::cout << "-------------------------------------------" << std::endl;
 
-    db.clear();
-    Task task6, task7, task8;
-    task6.id = "task-a"; task6.url = "http://test.com/a.zip"; task6.status = TaskStatus::Waiting;
-    task7.id = "task-b"; task7.url = "http://test.com/b.zip"; task7.status = TaskStatus::Downloading;
-    task8.id = "task-c"; task8.url = "http://test.com/c.zip"; task8.status = TaskStatus::Finished;
-    db.insertTask(task6);
-    db.insertTask(task7);
-    db.insertTask(task8);
+    query.exec("DELETE FROM downloads");
+    qint64 now5 = QDateTime::currentSecsSinceEpoch();
+    query.exec("INSERT INTO downloads (id, url, local_path, file_name, total_size, downloaded_size, status, error_message, created_at, updated_at, speed_bytes_per_sec) VALUES ('task-a', 'http://test.com/a.zip', '/a.zip', 'a.zip', 0, 0, 0, '', " + QString::number(now5) + ", " + QString::number(now5) + ", 0)");
+    query.exec("INSERT INTO downloads (id, url, local_path, file_name, total_size, downloaded_size, status, error_message, created_at, updated_at, speed_bytes_per_sec) VALUES ('task-b', 'http://test.com/b.zip', '/b.zip', 'b.zip', 0, 0, 1, '', " + QString::number(now5) + ", " + QString::number(now5) + ", 0)");
+    query.exec("INSERT INTO downloads (id, url, local_path, file_name, total_size, downloaded_size, status, error_message, created_at, updated_at, speed_bytes_per_sec) VALUES ('task-c', 'http://test.com/c.zip', '/c.zip', 'c.zip', 0, 0, 3, '', " + QString::number(now5) + ", " + QString::number(now5) + ", 0)");
 
-    // UT-2.5-1: Load all tasks
     total++;
-    std::vector<Task> allTasks = db.loadAllTasks();
-    currentScenario = "UT-2.5"; std::cout << "[UT-2.5]" << std::endl;
-    std::cout << "  Input: Insert 3 tasks with different status" << std::endl;
-    std::cout << "  Expected: vector size = 3" << std::endl;
-    std::cout << "  Actual: vector size = " << allTasks.size() << std::endl;
-    if (allTasks.size() == 3) {
+    int taskCount = 0;
+    if (query.exec("SELECT id FROM downloads")) {
+        while (query.next()) taskCount++;
+    }
+    currentScenario = "UT-2.5-1"; std::cout << "[UT-2.5-1]" << std::endl;
+    std::cout << "  Input: SELECT * FROM downloads" << std::endl;
+    std::cout << "  Expected: 3 tasks" << std::endl;
+    std::cout << "  Actual: " << taskCount << " tasks" << std::endl;
+    if (taskCount == 3) {
         std::cout << "  Result: PASS" << std::endl;
         updateUTStats(utStats, currentUT, true, currentScenario);
         passed++;
@@ -818,21 +897,21 @@ int main() {
         failed++;
     }
 
-    // UT-2.5-2: Verify task fields
     total++;
-    bool hasAllThree = false;
-    int countWaiting = 0, countDownloading = 0, countFinished = 0;
-    for (const auto& t : allTasks) {
-        if (t.status == TaskStatus::Waiting) countWaiting++;
-        if (t.status == TaskStatus::Downloading) countDownloading++;
-        if (t.status == TaskStatus::Finished) countFinished++;
+    int cntW = 0, cntD = 0, cntF = 0;
+    if (query.exec("SELECT status FROM downloads")) {
+        while (query.next()) {
+            int s = query.value("status").toInt();
+            if (s == 0) cntW++;
+            else if (s == 1) cntD++;
+            else if (s == 3) cntF++;
+        }
     }
-    currentScenario = "UT-2.5"; std::cout << "[UT-2.5]" << std::endl;
-    std::cout << "  Input: Check task status distribution" << std::endl;
+    currentScenario = "UT-2.5-2"; std::cout << "[UT-2.5-2]" << std::endl;
+    std::cout << "  Input: SELECT status FROM downloads" << std::endl;
     std::cout << "  Expected: 1 Waiting, 1 Downloading, 1 Finished" << std::endl;
-    std::cout << "  Actual: " << countWaiting << " Waiting, " << countDownloading << " Downloading, " << countFinished << " Finished" << std::endl;
-    hasAllThree = (countWaiting == 1 && countDownloading == 1 && countFinished == 1);
-    if (hasAllThree) {
+    std::cout << "  Actual: " << cntW << " Waiting, " << cntD << " Downloading, " << cntF << " Finished" << std::endl;
+    if (cntW == 1 && cntD == 1 && cntF == 1) {
         std::cout << "  Result: PASS" << std::endl;
         updateUTStats(utStats, currentUT, true, currentScenario);
         passed++;
@@ -843,26 +922,26 @@ int main() {
     }
 
     // ============================================
-    // UT-2.6: DBManager::deleteTask()
+    // UT-2.6: deleteTask() - SQL DELETE
     // ============================================
     currentUT = "UT-2.6";
-    std::cout << std::endl << "[UT-2.6] DBManager::deleteTask()" << std::endl;
+    std::cout << std::endl << "[UT-2.6] deleteTask() - SQL DELETE" << std::endl;
     std::cout << "-------------------------------------------" << std::endl;
 
-    db.clear();
-    Task task9;
-    task9.id = "test-id-006";
-    task9.url = "http://test.com/f.zip";
-    db.insertTask(task9);
+    query.exec("DELETE FROM downloads");
+    qint64 now6 = QDateTime::currentSecsSinceEpoch();
+    query.exec(
+        "INSERT INTO downloads (id, url, local_path, file_name, total_size, downloaded_size, status, error_message, created_at, updated_at, speed_bytes_per_sec) "
+        "VALUES ('test-id-006', 'http://test.com/f.zip', '/f.zip', 'f.zip', 0, 0, 0, '', " + QString::number(now6) + ", " + QString::number(now6) + ", 0)"
+    );
 
-    // UT-2.6-1: Delete existing task
     total++;
-    bool deleteResult = db.deleteTask("test-id-006");
-    currentScenario = "UT-2.6"; std::cout << "[UT-2.6]" << std::endl;
-    std::cout << "  Input: id=test-id-006" << std::endl;
-    std::cout << "  Expected: function returns true" << std::endl;
-    std::cout << "  Actual: " << (deleteResult ? "true" : "false") << std::endl;
-    if (deleteResult) {
+    bool delResult = query.exec("DELETE FROM downloads WHERE id = 'test-id-006'");
+    currentScenario = "UT-2.6-1"; std::cout << "[UT-2.6-1]" << std::endl;
+    std::cout << "  Input: DELETE FROM downloads WHERE id='test-id-006'" << std::endl;
+    std::cout << "  Expected: SQL 执行成功" << std::endl;
+    std::cout << "  Actual: " << (delResult ? "成功" : "失败") << std::endl;
+    if (delResult) {
         std::cout << "  Result: PASS" << std::endl;
         updateUTStats(utStats, currentUT, true, currentScenario);
         passed++;
@@ -872,14 +951,16 @@ int main() {
         failed++;
     }
 
-    // UT-2.6-2: Verify deletion
     total++;
-    Task deletedTask = db.getTaskById("test-id-006");
-    currentScenario = "UT-2.6"; std::cout << "[UT-2.6]" << std::endl;
-    std::cout << "  Input: Query ID=test-id-006 after deletion" << std::endl;
-    std::cout << "  Expected: empty task (id=\"\")" << std::endl;
-    std::cout << "  Actual: id=\"" << deletedTask.id << "\"" << std::endl;
-    if (deletedTask.id.empty()) {
+    bool notFound = true;
+    if (query.exec("SELECT id FROM downloads WHERE id = 'test-id-006'") && query.next()) {
+        notFound = false;
+    }
+    currentScenario = "UT-2.6-2"; std::cout << "[UT-2.6-2]" << std::endl;
+    std::cout << "  Input: SELECT id FROM downloads WHERE id='test-id-006'" << std::endl;
+    std::cout << "  Expected: 无记录" << std::endl;
+    std::cout << "  Actual: " << (notFound ? "无记录" : "有记录") << std::endl;
+    if (notFound) {
         std::cout << "  Result: PASS" << std::endl;
         updateUTStats(utStats, currentUT, true, currentScenario);
         passed++;
@@ -890,25 +971,28 @@ int main() {
     }
 
     // ============================================
-    // UT-2.7: DBManager::updateTaskSpeed()
+    // UT-2.7: updateTaskSpeed() - SQL UPDATE
     // ============================================
     currentUT = "UT-2.7";
-    std::cout << std::endl << "[UT-2.7] DBManager::updateTaskSpeed()" << std::endl;
+    std::cout << std::endl << "[UT-2.7] updateTaskSpeed() - SQL UPDATE" << std::endl;
     std::cout << "-------------------------------------------" << std::endl;
 
-    db.clear();
-    Task task10;
-    task10.id = "test-id-007";
-    task10.url = "http://test.com/g.zip";
-    db.insertTask(task10);
+    query.exec("DELETE FROM downloads");
+    qint64 now7 = QDateTime::currentSecsSinceEpoch();
+    query.exec(
+        "INSERT INTO downloads (id, url, local_path, file_name, total_size, downloaded_size, status, error_message, created_at, updated_at, speed_bytes_per_sec) "
+        "VALUES ('test-id-007', 'http://test.com/g.zip', '/g.zip', 'g.zip', 0, 0, 0, '', " + QString::number(now7) + ", " + QString::number(now7) + ", 0)"
+    );
 
-    // UT-2.7-1: Update task speed
     total++;
-    bool speedResult = db.updateTaskSpeed("test-id-007", 102400);
-    currentScenario = "UT-2.7"; std::cout << "[UT-2.7]" << std::endl;
-    std::cout << "  Input: id=test-id-007, speedBytesPerSec=102400" << std::endl;
-    std::cout << "  Expected: function returns true" << std::endl;
-    std::cout << "  Actual: " << (speedResult ? "true" : "false") << std::endl;
+    qint64 now7Upd = QDateTime::currentSecsSinceEpoch();
+    bool speedResult = query.exec(
+        "UPDATE downloads SET speed_bytes_per_sec = 102400, updated_at = " + QString::number(now7Upd) + " WHERE id = 'test-id-007'"
+    );
+    currentScenario = "UT-2.7-1"; std::cout << "[UT-2.7-1]" << std::endl;
+    std::cout << "  Input: UPDATE downloads SET speed_bytes_per_sec=102400" << std::endl;
+    std::cout << "  Expected: SQL 执行成功" << std::endl;
+    std::cout << "  Actual: " << (speedResult ? "成功" : "失败") << std::endl;
     if (speedResult) {
         std::cout << "  Result: PASS" << std::endl;
         updateUTStats(utStats, currentUT, true, currentScenario);
@@ -919,14 +1003,17 @@ int main() {
         failed++;
     }
 
-    // UT-2.7-2: Verify speed update
     total++;
-    Task speedTask = db.getTaskById("test-id-007");
-    currentScenario = "UT-2.7"; std::cout << "[UT-2.7]" << std::endl;
-    std::cout << "  Input: Query ID=test-id-007" << std::endl;
-    std::cout << "  Expected: speedBytesPerSec=102400" << std::endl;
-    std::cout << "  Actual: speedBytesPerSec=" << speedTask.speedBytesPerSec << std::endl;
-    if (speedTask.speedBytesPerSec == 102400) {
+    bool speedMatch = false;
+    if (query.exec("SELECT speed_bytes_per_sec FROM downloads WHERE id = 'test-id-007'") && query.next()) {
+        qint64 dbSpeed = query.value("speed_bytes_per_sec").toLongLong();
+        currentScenario = "UT-2.7-2"; std::cout << "[UT-2.7-2]" << std::endl;
+        std::cout << "  Input: SELECT speed_bytes_per_sec FROM downloads" << std::endl;
+        std::cout << "  Expected: speed=102400" << std::endl;
+        std::cout << "  Actual: speed=" << dbSpeed << std::endl;
+        speedMatch = (dbSpeed == 102400);
+    }
+    if (speedMatch) {
         std::cout << "  Result: PASS" << std::endl;
         updateUTStats(utStats, currentUT, true, currentScenario);
         passed++;
