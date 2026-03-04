@@ -157,6 +157,9 @@ void HttpDownloader::start() {
         // 创建网络请求
         QNetworkRequest request(QUrl(m_task.url));
 
+        // 禁用自动重定向，手动处理
+        request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
+
         // 设置 User-Agent
         request.setHeader(QNetworkRequest::UserAgentHeader,
                          "XDown/1.0 (Windows) Mozilla/5.0");
@@ -250,13 +253,11 @@ void HttpDownloader::onReadyRead() {
     }
 
     // P1-5 修复: 首次获取文件总大小 (在循环外解析一次)
-    // 记录开始时的已下载字节数，用于正确计算总大小
-    static qint64 prevDownloaded = 0;
     if (m_task.totalBytes == 0 && m_reply->hasRawHeader("Content-Length")) {
         qint64 contentLength = m_reply->rawHeader("Content-Length").toLongLong();
         // 如果是断点续传，需要加上已下载的部分
-        if (prevDownloaded > 0 && !m_isRedirecting) {
-            m_task.totalBytes = contentLength + prevDownloaded;
+        if (m_task.downloadedBytes > 0 && !m_isRedirecting) {
+            m_task.totalBytes = contentLength + m_task.downloadedBytes;
         } else {
             m_task.totalBytes = contentLength;
         }
@@ -279,9 +280,6 @@ void HttpDownloader::onReadyRead() {
         }
     }
 
-    // 更新上次已下载字节数，用于下次计算总大小
-    prevDownloaded = m_task.downloadedBytes;
-
     // 定期刷新文件到磁盘
     if (m_file) {
         m_file->flush();
@@ -299,8 +297,9 @@ void HttpDownloader::onFinished() {
     QUrl redirectUrl = m_reply->attribute(QNetworkRequest::RedirectionTargetAttribute).toUrl();
     qDebug() << "Redirect URL:" << redirectUrl << "m_isRedirecting:" << m_isRedirecting;
     if (redirectUrl.isValid() && !m_isRedirecting) {
-        // 由 onRedirected 处理
-        qDebug() << "Redirect detected, let onRedirected handle it";
+        // 手动处理重定向
+        qDebug() << "Redirect detected, handling manually";
+        onRedirected(redirectUrl);
         return;
     }
 
@@ -328,10 +327,12 @@ void HttpDownloader::onFinished() {
         // 如果之前发送了 Range 请求，说明服务器不支持断点续传
         // 关键修复: 检查是否已经下载完成（downloadedBytes >= totalBytes）
         // 如果文件已经下载完成，就不需要重新下载了！
-        if (m_task.totalBytes > 0 && m_task.downloadedBytes >= m_task.totalBytes) {
+        // 额外条件: 只有当本次请求确实发送了 Range 头时才重新下载
+        bool sentRangeRequest = m_reply->request().hasRawHeader("Range");
+        if (sentRangeRequest && m_task.totalBytes > 0 && m_task.downloadedBytes >= m_task.totalBytes) {
             // 文件已经下载完成，不需要重新下载
             qInfo() << "Download completed (200 OK, downloadedBytes >= totalBytes)";
-        } else if (m_file && m_file->exists()) {
+        } else if (sentRangeRequest && m_file && m_file->exists()) {
             // 需要删除已下载的文件，重新从头开始下载
             m_file->close();
             m_file->remove();
@@ -447,21 +448,31 @@ void HttpDownloader::onRedirected(const QUrl& url) {
     // 暂停当前下载，更新 URL 后继续
     m_isRedirecting = true;
     m_task.downloadedBytes = 0;  // 重置下载进度
+    m_task.totalBytes = 0;       // 重置文件总大小，由新请求重新获取
 
     if (m_file && m_file->isOpen()) {
         m_file->close();
         m_file->remove();  // 删除不完整的文件
+    }
+    // 释放旧文件对象，start() 中会重新创建
+    delete m_file;
+    m_file = nullptr;
+
+    // 处理相对URL
+    QUrl newUrl = url;
+    if (url.isRelative()) {
+        newUrl = QUrl(m_task.url).resolved(url);
     }
 
     m_reply->deleteLater();
     m_reply = nullptr;
 
     // 更新 URL 并重新开始
-    m_task.url = url.toString();
-    qInfo() << "Redirected to:" << url.toString();
+    m_task.url = newUrl.toString();
+    qInfo() << "Redirected to:" << newUrl.toString();
 
     // 重新解析文件名
-    parseFileName(url);
+    parseFileName(newUrl);
 
     // 重新开始下载
     start();

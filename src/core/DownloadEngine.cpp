@@ -226,6 +226,9 @@ void DownloadEngine::deleteTask(const QString& id, bool deleteFile) {
     auto* downloader = m_activeDownloaders.value(id);
     if (downloader) {
         downloader->stop();
+        // 等待工作线程释放文件句柄（Windows 下文件被占用时无法删除）
+        QThread::msleep(200);
+        QCoreApplication::processEvents();
         downloader->deleteLater();
         m_activeDownloaders.remove(id);
     }
