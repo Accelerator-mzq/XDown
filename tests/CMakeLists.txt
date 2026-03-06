@@ -20,7 +20,7 @@ get_filename_component(XDOWN_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 
 # ========== 单元测试: DownloadTask 测试 ==========
 set(UT_SOURCES
-    tst_downloadtask.cpp
+    src/tst_downloadtask.cpp
 )
 
 qt_add_executable(test_downloadtask ${UT_SOURCES})
@@ -44,7 +44,7 @@ add_test(NAME DownloadTaskTest COMMAND test_downloadtask)
 
 # ========== 系统测试: HttpDownloader 测试 ==========
 set(ST_SOURCES
-    tst_systemtest.cpp
+    src/tst_systemtest.cpp
 )
 
 qt_add_executable(test_systemtest ${ST_SOURCES})
@@ -53,15 +53,7 @@ target_include_directories(test_systemtest PRIVATE
     ${XDOWN_ROOT_DIR}/src
 )
 
-# 检查 XDownCore 库是否存在
-set(XDOWNCORE_LIB "")
-if(EXISTS ${XDOWN_ROOT_DIR}/build/libXDownCore.a)
-    set(XDOWNCORE_LIB ${XDOWN_ROOT_DIR}/build/libXDownCore.a)
-elseif(EXISTS ${XDOWN_ROOT_DIR}/build/Desktop_Qt_6_5_3_MinGW_64_bit-Debug/libXDownCore.a)
-    set(XDOWNCORE_LIB ${XDOWN_ROOT_DIR}/build/Desktop_Qt_6_5_3_MinGW_64_bit-Debug/libXDownCore.a)
-endif()
-
-# 添加源文件直接编译（而不是使用静态库）
+# 添加源文件直接编译
 target_sources(test_systemtest PRIVATE
     ${XDOWN_ROOT_DIR}/src/core/DBManager.cpp
     ${XDOWN_ROOT_DIR}/src/core/HttpDownloader.cpp
@@ -79,7 +71,7 @@ target_link_libraries(test_systemtest PRIVATE
 add_test(NAME SystemTest COMMAND test_systemtest)
 
 # 简化的 HTTP 测试
-qt_add_executable(tst_httptest tst_httptest.cpp)
+qt_add_executable(tst_httptest src/tst_httptest.cpp)
 
 target_include_directories(tst_httptest PRIVATE
     ${XDOWN_ROOT_DIR}/src
@@ -98,4 +90,3 @@ target_link_libraries(tst_httptest PRIVATE
     Qt6::Network
     Qt6::Sql
 )
-
