@@ -58,7 +58,7 @@ void testCreateDownloader() {
 
     DownloadTask task;
     task.id = "test-001";
-    task.url = "http://127.0.0.1:8080/file1.zip";
+    task.url = "http://127.0.0.1:28080/file1.zip";
     task.localPath = "test.zip";
 
     // 创建下载器

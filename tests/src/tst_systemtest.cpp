@@ -168,7 +168,7 @@ void TestSystemWorkflow::testHttp404_data() {
 // 测试 404 错误处理
 void TestSystemWorkflow::testHttp404() {
     // 直接使用固定值，不依赖 QTest 宏
-    QString url = "http://127.0.0.1:8080/404";
+    QString url = "http://127.0.0.1:28080/404";
     int expectedStatus = static_cast<int>(TaskStatus::Error);
 
     getCurrentTest() = "ST-5.1";
@@ -237,7 +237,7 @@ void TestSystemWorkflow::testHttp404() {
 // 测试 500 错误处理
 void TestSystemWorkflow::testHttp500() {
     // 直接使用固定值
-    QString url = "http://127.0.0.1:8080/500";
+    QString url = "http://127.0.0.1:28080/500";
 
     getCurrentTest() = "ST-5.5";
     if (getStats().find(getCurrentTest()) == getStats().end()) {
@@ -512,7 +512,7 @@ void TestSystemWorkflow::testWritePermission() {
     // 使用不存在的驱动器路径模拟权限错误
     DownloadTask task;
     task.id = "test-readonly";
-    task.url = "http://127.0.0.1:8080/file1.zip";
+    task.url = "http://127.0.0.1:28080/file1.zip";
     task.localPath = "Z:/nonexistent/test.zip";  // 不存在的路径
 
     HttpDownloader downloader(task);
@@ -562,7 +562,7 @@ void TestSystemWorkflow::testDuplicateUrlDetection() {
     QSignalSpy statusSpy(&engine, &DownloadEngine::taskStatusChanged);
 
     // 第一个任务
-    QString url = "http://127.0.0.1:8080/file1.zip";
+    QString url = "http://127.0.0.1:28080/file1.zip";
     QString savePath = tempDir.path() + "/test1.zip";
 
     fprintf(stderr, "testDuplicateUrlDetection: adding first task...\n");
@@ -661,7 +661,7 @@ void TestSystemWorkflow::testSpecialCharFileName() {
 
     DownloadTask task;
     task.id = "test-special-" + QString::number(QDateTime::currentSecsSinceEpoch());
-    task.url = "http://127.0.0.1:8080/file1.zip";
+    task.url = "http://127.0.0.1:28080/file1.zip";
     task.localPath = tempDir.path() + "/测试 文件(1).zip";
 
     HttpDownloader downloader(task);
@@ -709,7 +709,7 @@ void TestSystemWorkflow::testHttp403() {
 
     DownloadTask task;
     task.id = "test-403-" + QString::number(QDateTime::currentSecsSinceEpoch());
-    task.url = "http://127.0.0.1:8080/403";
+    task.url = "http://127.0.0.1:28080/403";
     task.localPath = tempDir.path() + "/test.zip";
 
     HttpDownloader downloader(task);
@@ -752,7 +752,7 @@ void TestSystemWorkflow::testHttpRedirect() {
 
     DownloadTask task;
     task.id = "test-redirect-" + QString::number(QDateTime::currentSecsSinceEpoch());
-    task.url = "http://127.0.0.1:8080/redirect-chain";
+    task.url = "http://127.0.0.1:28080/redirect-chain";
     task.localPath = tempDir.path() + "/test.zip";
 
     HttpDownloader downloader(task);
@@ -812,7 +812,7 @@ void TestSystemWorkflow::testWaitingQueueAutoSchedule() {
 
     // 添加 4 个任务（前3个立即开始，第4个等待）
     for (int i = 1; i <= 4; ++i) {
-        QString url = QString("http://127.0.0.1:8080/file%1.zip").arg(i);
+        QString url = QString("http://127.0.0.1:28080/file%1.zip").arg(i);
         engine.addNewTask(url, tempDir.path());
     }
 
@@ -856,7 +856,7 @@ void TestSystemWorkflow::testDeleteTaskWithFile() {
 
     QSignalSpy finishSpy(&engine, &DownloadEngine::downloadFinished);
 
-    QString url = "http://127.0.0.1:8080/file1.zip";
+    QString url = "http://127.0.0.1:28080/file1.zip";
     engine.addNewTask(url, tempDir.path());
 
     // 等待下载完成信号
@@ -925,7 +925,7 @@ void TestSystemWorkflow::testDeleteTaskKeepFile() {
     DownloadEngine engine;
     engine.initialize();
 
-    QString url = "http://127.0.0.1:8080/file1.zip";
+    QString url = "http://127.0.0.1:28080/file1.zip";
     QString savePath = tempDir.path() + "/keep_test.zip";
     engine.addNewTask(url, savePath);
 
@@ -1014,7 +1014,7 @@ void TestSystemWorkflow::testFileNameParsing() {
     // 测试1: 带文件名的URL
     DownloadTask task1;
     task1.id = "test-named-" + QString::number(QDateTime::currentSecsSinceEpoch());
-    task1.url = "http://127.0.0.1:8080/named/report.pdf";
+    task1.url = "http://127.0.0.1:28080/named/report.pdf";
     task1.localPath = tempDir.path() + "/test1.pdf";
 
     HttpDownloader downloader1(task1);
@@ -1040,7 +1040,7 @@ void TestSystemWorkflow::testFileNameParsing() {
     // 测试2: 无文件名的URL
     DownloadTask task2;
     task2.id = "test-noname-" + QString::number(QDateTime::currentSecsSinceEpoch());
-    task2.url = "http://127.0.0.1:8080/noname/";
+    task2.url = "http://127.0.0.1:28080/noname/";
     task2.localPath = tempDir.path() + "/test2.dat";
 
     HttpDownloader downloader2(task2);
@@ -1085,7 +1085,7 @@ void TestSystemWorkflow::testNoResumeSupport() {
 
     DownloadTask task;
     task.id = "test-no-resume-" + QString::number(QDateTime::currentSecsSinceEpoch());
-    task.url = "http://127.0.0.1:8080/no-resume";
+    task.url = "http://127.0.0.1:28080/no-resume";
     task.localPath = tempDir.path() + "/noresume.zip";
 
     HttpDownloader downloader(task);
@@ -1138,7 +1138,7 @@ void TestSystemWorkflow::testDatabaseRecordValidation() {
     DownloadEngine engine;
     engine.initialize();
 
-    QString url = "http://127.0.0.1:8080/file1.zip";
+    QString url = "http://127.0.0.1:28080/file1.zip";
     QString savePath = tempDir.path() + "/dbtest.zip";
 
     // 添加任务
@@ -1207,7 +1207,7 @@ void TestSystemWorkflow::testEndToEndDownload() {
     DownloadEngine engine;
     engine.initialize();
 
-    QString url = "http://127.0.0.1:8080/file1.zip";
+    QString url = "http://127.0.0.1:28080/file1.zip";
 
     // 传递目录路径，让 parseFileName 自动解析文件名
     engine.addNewTask(url, tempDir.path());
@@ -1304,7 +1304,7 @@ void TestSystemWorkflow::testUIStatusRefreshDownloadComplete() {
     DownloadEngine engine;
     engine.initialize();
 
-    QString url = "http://127.0.0.1:8080/file1.zip";
+    QString url = "http://127.0.0.1:28080/file1.zip";
     engine.addNewTask(url, tempDir.path());
 
     // 等待下载完成
@@ -1373,7 +1373,7 @@ void TestSystemWorkflow::testUIStatusRefreshTabSwitch() {
         return;
     }
 
-    QString url = "http://127.0.0.1:8080/file1.zip";
+    QString url = "http://127.0.0.1:28080/file1.zip";
     engine.addNewTask(url, tempDir.path());
 
     // 等待下载完成
@@ -1426,7 +1426,7 @@ void TestSystemWorkflow::testRedirectLimitExceeded() {
 
     DownloadTask task;
     task.id = "test-redirect-loop-" + QString::number(QDateTime::currentSecsSinceEpoch());
-    task.url = "http://127.0.0.1:8080/redirect-loop";
+    task.url = "http://127.0.0.1:28080/redirect-loop";
     task.localPath = tempDir.path() + "/loop.zip";
 
     HttpDownloader downloader(task);
@@ -1483,7 +1483,7 @@ void TestSystemWorkflow::testRestartRecovery() {
     DownloadEngine engine1;
     engine1.initialize();
 
-    QString url = "http://127.0.0.1:8080/file1.zip";
+    QString url = "http://127.0.0.1:28080/file1.zip";
     QString savePath = tempDir.path() + "/restart_test.zip";
 
     engine1.addNewTask(url, savePath);
@@ -1553,7 +1553,7 @@ void TestSystemWorkflow::testProgressRefreshFrequency() {
 
     DownloadTask task;
     task.id = "test-refresh-" + QString::number(QDateTime::currentSecsSinceEpoch());
-    task.url = "http://127.0.0.1:8080/file1.zip";
+    task.url = "http://127.0.0.1:28080/file1.zip";
     task.localPath = tempDir.path() + "/refresh.zip";
 
     HttpDownloader downloader(task);
@@ -1610,7 +1610,7 @@ void TestSystemWorkflow::testResumeDownload() {
 
     DownloadTask task;
     task.id = "test-resume-" + QString::number(QDateTime::currentSecsSinceEpoch());
-    task.url = "http://127.0.0.1:8080/resumable";
+    task.url = "http://127.0.0.1:28080/resumable";
     task.localPath = tempDir.path() + "/resume.zip";
 
     HttpDownloader downloader(task);
@@ -1676,7 +1676,7 @@ void TestSystemWorkflow::testUIResponsiveness() {
 
     // 启动3个并发下载
     for (int i = 1; i <= 3; ++i) {
-        QString url = QString("http://127.0.0.1:8080/file%1.zip").arg(i);
+        QString url = QString("http://127.0.0.1:28080/file%1.zip").arg(i);
         engine.addNewTask(url, tempDir.path());
     }
 
@@ -1729,7 +1729,7 @@ void TestSystemWorkflow::testMemoryLimit() {
 
     // 启动3个并发下载
     for (int i = 1; i <= 3; ++i) {
-        QString url = QString("http://127.0.0.1:8080/file%1.zip").arg(i);
+        QString url = QString("http://127.0.0.1:28080/file%1.zip").arg(i);
         engine.addNewTask(url, tempDir.path());
     }
 

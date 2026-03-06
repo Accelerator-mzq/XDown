@@ -17,7 +17,7 @@ import tempfile
 from urllib.parse import urlparse
 
 # 测试配置
-MOCK_SERVER_PORT = 8080
+MOCK_SERVER_PORT = 28080
 APP_PATH = "../build/appXDown.exe"
 TEST_TIMEOUT = 30
 
@@ -212,7 +212,7 @@ def test_404_error():
 
     try:
         result = subprocess.run(
-            ["curl", "-s", "-o", "NUL", "-w", "%{http_code}", "http://127.0.0.1:8080/404"],
+            ["curl", "-s", "-o", "NUL", "-w", "%{http_code}", "http://127.0.0.1:28080/404"],
             capture_output=True,
             text=True,
             timeout=10
@@ -245,7 +245,7 @@ def test_500_error():
 
     try:
         result = subprocess.run(
-            ["curl", "-s", "-o", "NUL", "-w", "%{http_code}", "http://127.0.0.1:8080/500"],
+            ["curl", "-s", "-o", "NUL", "-w", "%{http_code}", "http://127.0.0.1:28080/500"],
             capture_output=True,
             text=True,
             timeout=10
@@ -274,7 +274,7 @@ def test_empty_file():
 
     try:
         result = subprocess.run(
-            ["curl", "-s", "-I", "http://127.0.0.1:8080/empty"],
+            ["curl", "-s", "-I", "http://127.0.0.1:28080/empty"],
             capture_output=True,
             text=True,
             timeout=10
@@ -306,7 +306,7 @@ def test_concurrent_download():
 
         def download_file(filename):
             result = subprocess.run(
-                ["curl", "-s", "-o", os.devnull, "-w", "%{http_code}", f"http://127.0.0.1:8080/{filename}"],
+                ["curl", "-s", "-o", os.devnull, "-w", "%{http_code}", f"http://127.0.0.1:28080/{filename}"],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -341,7 +341,7 @@ def test_timeout():
 
     try:
         result = subprocess.run(
-            ["curl", "-s", "-m", "5", "-o", "NUL", "-w", "%{http_code}", "http://127.0.0.1:8080/timeout"],
+            ["curl", "-s", "-m", "5", "-o", "NUL", "-w", "%{http_code}", "http://127.0.0.1:28080/timeout"],
             capture_output=True,
             text=True,
             timeout=10
@@ -396,7 +396,7 @@ def test_special_char_filename():
 
     try:
         result = subprocess.run(
-            ["curl", "-s", "-I", "http://127.0.0.1:8080/file1.zip"],
+            ["curl", "-s", "-I", "http://127.0.0.1:28080/file1.zip"],
             capture_output=True,
             text=True,
             timeout=10

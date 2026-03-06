@@ -266,10 +266,10 @@ public:
 ### Windows
 
 ```cmake
-# CMakeLists.txt 中添加
+# CMakeLists.txt 中添加（目标名根据项目实际可执行文件名修改）
 if(WIN32)
-    add_custom_command(TARGET myapp POST_BUILD
-        COMMAND windeployqt $<TARGET_FILE:myapp> --qmldir ${CMAKE_PREFIX_PATH}/qml
+    add_custom_command(TARGET appXDown POST_BUILD
+        COMMAND windeployqt $<TARGET_FILE:appXDown> --qmldir ${CMAKE_PREFIX_PATH}/qml
     )
 endif()
 ```

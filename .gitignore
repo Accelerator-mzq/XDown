@@ -1,7 +1,13 @@
+.env
+.pipeline/*.log
+.pipeline/last-state.json
+.pipeline/test-loop-report.md
+
 # Qt Creator 项目文件
 *.pro.user
 *.pro.user.*
 *.pri
+CMakeLists.txt.user
 
 # 构建目录
 build/
