@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file tst_systemtest.cpp
  * @brief XDown 系统测试用例 - 自动化测试
  * @description 使用 Qt Test 框架测试 HttpDownloader 的各种 HTTP 错误处理场景

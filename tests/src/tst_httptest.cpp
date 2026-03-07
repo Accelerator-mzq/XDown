@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file tst_httptest.cpp
  * @brief 简化的 HttpDownloader 系统测试
  * @description 不使用 Qt Test 框架，直接实现测试逻辑
