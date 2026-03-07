@@ -24,6 +24,7 @@ set(UT_SOURCES
 )
 
 qt_add_executable(test_downloadtask ${UT_SOURCES})
+set_target_properties(test_downloadtask PROPERTIES WIN32_EXECUTABLE FALSE)
 
 target_include_directories(test_downloadtask PRIVATE
     ${XDOWN_ROOT_DIR}/src
@@ -48,6 +49,7 @@ set(ST_SOURCES
 )
 
 qt_add_executable(test_systemtest ${ST_SOURCES})
+set_target_properties(test_systemtest PROPERTIES WIN32_EXECUTABLE FALSE)
 
 target_include_directories(test_systemtest PRIVATE
     ${XDOWN_ROOT_DIR}/src
@@ -72,6 +74,7 @@ add_test(NAME SystemTest COMMAND test_systemtest)
 
 # 简化的 HTTP 测试
 qt_add_executable(tst_httptest src/tst_httptest.cpp)
+set_target_properties(tst_httptest PROPERTIES WIN32_EXECUTABLE FALSE)
 
 target_include_directories(tst_httptest PRIVATE
     ${XDOWN_ROOT_DIR}/src
