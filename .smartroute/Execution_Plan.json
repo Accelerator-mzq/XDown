@@ -1,0 +1,62 @@
+{
+  "nodes": [
+    {
+      "id": "1",
+      "task": "原子化任务拆解: 请执行一次全量编译与回归测试，验证现有代码在 V3.0 框架下能否正常流转。",
+      "role": "planner",
+      "metadata": {}
+    },
+    {
+      "id": "2",
+      "task": "实现业务代码: 无特定目标文件，仅需跑通 pipeline",
+      "role": "coder",
+      "metadata": {}
+    },
+    {
+      "id": "3",
+      "task": "生成测试代码: system + unit",
+      "role": "test_coder",
+      "metadata": {}
+    },
+    {
+      "id": "4",
+      "task": "执行编译与测试",
+      "role": "runtime",
+      "metadata": {}
+    },
+    {
+      "id": "5",
+      "task": "失败时修复",
+      "role": "fixer",
+      "metadata": {}
+    },
+    {
+      "id": "6",
+      "task": "超限后深度诊断",
+      "role": "debug_expert",
+      "metadata": {}
+    }
+  ],
+  "edges": [
+    {
+      "from": "1",
+      "to": "2"
+    },
+    {
+      "from": "2",
+      "to": "3"
+    },
+    {
+      "from": "3",
+      "to": "4"
+    },
+    {
+      "from": "4",
+      "to": "5"
+    },
+    {
+      "from": "5",
+      "to": "6"
+    }
+  ]
+}

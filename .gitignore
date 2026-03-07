@@ -1,60 +1,33 @@
 .env
-.pipeline/*.log
+.pipeline/logs/*.log
+.pipeline/logs/trace.jsonl
 .pipeline/last-state.json
 .pipeline/test-loop-report.md
+.smartroute/artifacts/
+smartroute.config.json
+smartroute.config.local.json
 
-# Qt Creator 项目文件
-*.pro.user
-*.pro.user.*
-*.pri
-CMakeLists.txt.user
-
-# 构建目录
+# C++ / Qt Build artifacts
 build/
-build-*/
-*_build/
-Desktop_*/
-*.autosave
-*.user.old
-
-# 编译产物
-*.o
-*.obj
+bin/
 *.exe
 *.dll
-*.a
-*.lib
-*.so
-*.dylib
+*.user
+*.suo
 
-# Qt 特有
-moc_*.cpp
-qrc_*.cpp
-ui_*.h
-*.qmlc
-*.jsc
-*.cache
+# Python environments & caches
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
 
-# IDE
+# IDE & Editor
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
 
-# 系统文件
-.DS_Store
-Thumbs.db
-
-# 测试输出
-Testing/
-CTestTestfile.cmake
-
-# 日志输出
-stderr.txt
-stdout.txt
-
-# 测试截图和临时测试目录
-picture/
-tests/test_qt/
-tests/build/
+# Local databases and tests 
+*.db
+xdown_data.db
+xdown_data_test.db
+XDown.db
