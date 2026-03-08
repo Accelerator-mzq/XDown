@@ -1,3 +1,4 @@
+
 cmake_minimum_required(VERSION 3.20)
 
 # 测试项目
@@ -25,6 +26,9 @@ set(UT_SOURCES
 
 qt_add_executable(test_downloadtask ${UT_SOURCES})
 
+# 强制为控制台程序，避免 libstdc++ 版本冲突导致的 SegFault
+set_target_properties(test_downloadtask PROPERTIES WIN32_EXECUTABLE FALSE)
+
 target_include_directories(test_downloadtask PRIVATE
     ${XDOWN_ROOT_DIR}/src
 )
@@ -48,6 +52,9 @@ set(ST_SOURCES
 )
 
 qt_add_executable(test_systemtest ${ST_SOURCES})
+
+# 强制为控制台程序，避免 libstdc++ 版本冲突导致的 SegFault
+set_target_properties(test_systemtest PROPERTIES WIN32_EXECUTABLE FALSE)
 
 target_include_directories(test_systemtest PRIVATE
     ${XDOWN_ROOT_DIR}/src
@@ -73,6 +80,9 @@ add_test(NAME SystemTest COMMAND test_systemtest)
 # 简化的 HTTP 测试
 qt_add_executable(tst_httptest src/tst_httptest.cpp)
 
+# 强制为控制台程序，避免 libstdc++ 版本冲突导致的 SegFault
+set_target_properties(tst_httptest PROPERTIES WIN32_EXECUTABLE FALSE)
+
 target_include_directories(tst_httptest PRIVATE
     ${XDOWN_ROOT_DIR}/src
 )
@@ -90,3 +100,32 @@ target_link_libraries(tst_httptest PRIVATE
     Qt6::Network
     Qt6::Sql
 )
+
+# ============================================
+# 修复 libstdc++ 版本冲突：复制 MSYS2 的 DLL 到测试目录
+# 解决 SegFault 问题 (Qt 6.5.3 使用 GCC 11.2，编译器使用 GCC 14.2)
+# ============================================
+set(MINGW_BIN "E:/DevelopmentTool/mingw64/bin")
+set(TEST_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+
+if(WIN32)
+    # 复制 libstdc++-6.dll (GCC 14.2 版本)
+    add_custom_command(TARGET test_downloadtask POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${MINGW_BIN}/libstdc++-6.dll"
+            "${TEST_DIR}/"
+        COMMENT "Copying GCC 14.2 libstdc++ to test directory..."
+    )
+    add_custom_command(TARGET test_systemtest POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${MINGW_BIN}/libstdc++-6.dll"
+            "${TEST_DIR}/"
+        COMMENT "Copying GCC 14.2 libstdc++ to test directory..."
+    )
+    add_custom_command(TARGET tst_httptest POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${MINGW_BIN}/libstdc++-6.dll"
+            "${TEST_DIR}/"
+        COMMENT "Copying GCC 14.2 libstdc++ to test directory..."
+    )
+endif()

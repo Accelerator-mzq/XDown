@@ -8,6 +8,7 @@
 *.pro.user.*
 *.pri
 CMakeLists.txt.user
+smartroute.config.json
 
 # 构建目录
 build/

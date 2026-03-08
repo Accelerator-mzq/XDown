@@ -16,6 +16,7 @@
 #include <QTimer>
 #include <QThread>
 #include <QElapsedTimer>
+#include <QProcess>
 
 #include "common/DownloadTask.h"
 #include "core/HttpDownloader.h"
@@ -1820,6 +1821,50 @@ void TestSystemWorkflow::printSTSummary() {
 // 运行所有测试函数
 void TestSystemWorkflow::runAllTests() {
     fprintf(stderr, "runAllTests: starting...\n");
+    fflush(stderr);
+
+    // ========================================
+    // ST-APP: appXDown.exe 启动测试
+    // ========================================
+    fprintf(stderr, "Running testAppLaunch...\n");
+    fflush(stderr);
+    getCurrentTest() = "ST-APP";
+    if (getStats().find(getCurrentTest()) == getStats().end()) {
+        getStats()[getCurrentTest()] = {0, 0, "appXDown.exe 启动测试"};
+    }
+
+    // appXDown.exe 在 build 目录，测试在 build/tests 目录
+    QString appPath = QCoreApplication::applicationDirPath() + "/../appXDown.exe";
+    appPath = QDir::cleanPath(appPath);
+    QProcess appProcess;
+    appProcess.setProgram(appPath);
+    appProcess.setArguments(QStringList() << "--version");  // 尝试带参数启动
+    appProcess.start();
+    bool started = appProcess.waitForStarted(5000);
+
+    if (started) {
+        // 等待进程退出
+        appProcess.waitForFinished(3000);
+        appProcess.kill();
+        fprintf(stderr, "ST-APP PASS: appXDown.exe 启动成功\n");
+        getStats()[getCurrentTest()].passed++;
+    } else {
+        // 尝试不带参数启动
+        appProcess.setArguments(QStringList());
+        appProcess.start();
+        started = appProcess.waitForStarted(5000);
+        if (started) {
+            // 运行 2 秒后关闭
+            QThread::sleep(2);
+            appProcess.kill();
+            appProcess.waitForFinished(1000);
+            fprintf(stderr, "ST-APP PASS: appXDown.exe 启动成功\n");
+            getStats()[getCurrentTest()].passed++;
+        } else {
+            fprintf(stderr, "ST-APP FAIL: appXDown.exe 启动失败\n");
+            getStats()[getCurrentTest()].failed++;
+        }
+    }
     fflush(stderr);
 
     // 依次调用各个测试函数

@@ -134,6 +134,11 @@
 
 ## 项目构建信息
 
+<!-- SMARTROUTE-CONFIG-START -->
 - 编译命令: {{COMPILE_COMMAND}}
 - 系统测试命令: {{TEST_COMMAND}}
 - 单元测试命令: {{UNIT_TEST_COMMAND}}
+<!-- SMARTROUTE-CONFIG-END -->
+
+- 运行程序 (Windows): [.\build\Debug\appXDown.exe]
+- 清理构建: [Remove-Item -Recurse -Force build`](PowerShell)
