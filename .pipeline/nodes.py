@@ -150,6 +150,7 @@ def planner_generate_execution_plan_node(state: TestLoopState) -> TestLoopState:
     """Planner: 读取 task.md，输出 Execution_Plan.json"""
     print("🧭 [Planner] 生成原子化执行计划...")
     _set_current_role(state, "planner")
+    state["planner_failed"] = False
 
     objective = state.get("task_objective", "").strip() or "未提供任务目标"
     rules = state.get("task_rules", "").strip() or "遵循现有项目编码规范"
@@ -157,7 +158,8 @@ def planner_generate_execution_plan_node(state: TestLoopState) -> TestLoopState:
     files_text = "\n".join(f"- {f}" for f in target_files) if target_files else "- （未指定）"
 
     system_prompt = """你是 SmartRoute Planner（规划师）。
-请基于任务目标拆解出可执行原子步骤，输出严格 JSON，不要输出解释文字。
+你的输出必须是纯 JSON 格式，不要有任何其他文字。
+直接输出 JSON，不要用代码块包裹，不要有任何解释。
 JSON 格式:
 {
   "nodes":[
@@ -195,6 +197,7 @@ JSON 格式:
     if response.startswith("[ERROR]"):
         print(f"  ⚠️ Planner 调用失败: {response[:160]}")
         state["planner_failed"] = True
+        state["planner_error"] = response[:500]
     else:
         json_text = _extract_json_from_response(response)
         try:
@@ -213,11 +216,12 @@ JSON 格式:
             checked = TaskGraphEngine.from_json_file(plan_path)
             state["execution_plan"] = checked.to_dict()
         except Exception as e:
-            print(f"  ⚠️ Planner 输出非法，使用默认计划: {e}")
-            fallback = TaskGraphEngine.create_default(objective, target_files)
-            state["execution_plan"] = fallback.to_dict()
+            print(f"  ⚠️ Planner 输出非法，已中止本轮流水线: {e}")
+            state["planner_failed"] = True
+            state["planner_error"] = f"invalid_execution_plan_json: {e}"
+            state["execution_plan"] = {}
 
-    if state.get("execution_plan_path"):
+    if (not state.get("planner_failed")) and state.get("execution_plan_path") and state.get("execution_plan"):
         with open(state["execution_plan_path"], "w", encoding="utf-8") as f:
             json.dump(state["execution_plan"], f, ensure_ascii=False, indent=2)
         print(f"  📝 已输出计划: {state['execution_plan_path']}")
