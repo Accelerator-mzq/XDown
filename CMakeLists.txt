@@ -88,9 +88,14 @@ if(WIN32)
     find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${_qt_bin_dir}")
 
     if(WINDEPLOYQT_EXECUTABLE)
+        # 获取 Qt 的 prefix 路径用于定位 qml 目录
+        get_target_property(_qt_prefix Qt6::Core IMPORTED_LOCATION)
+        get_filename_component(_qt_prefix_path "${_qt_prefix}" DIRECTORY)
+        get_filename_component(_qt_prefix_path "${_qt_prefix_path}" DIRECTORY)
+
         add_custom_command(TARGET appXDown POST_BUILD
-            COMMAND "${WINDEPLOYQT_EXECUTABLE}" $<TARGET_FILE:appXDown>
-            COMMENT "Running windeployqt to copy Qt DLLs..."
+            COMMAND "${WINDEPLOYQT_EXECUTABLE}" $<TARGET_FILE:appXDown> --qmldir "${_qt_prefix_path}/qml"
+            COMMENT "Running windeployqt to copy Qt DLLs and QML plugins..."
         )
     else()
         message(WARNING "windeployqt not found! Qt DLLs will not be deployed automatically.")

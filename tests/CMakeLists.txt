@@ -94,3 +94,41 @@ target_link_libraries(tst_httptest PRIVATE
     Qt6::Network
     Qt6::Sql
 )
+
+# ========== QML GUI 加载测试 ==========
+set(QML_TEST_SOURCES
+    src/tst_qml.cpp
+)
+
+# 添加 QML 资源文件
+set(QML_RESOURCES
+    ${XDOWN_ROOT_DIR}/resources/qml.qrc
+)
+
+qt_add_executable(tst_qml ${QML_TEST_SOURCES} ${QML_RESOURCES})
+set_target_properties(tst_qml PROPERTIES WIN32_EXECUTABLE FALSE)
+
+target_include_directories(tst_qml PRIVATE
+    ${XDOWN_ROOT_DIR}/src
+    ${XDOWN_ROOT_DIR}/resources
+)
+
+# 添加必要的源文件
+target_sources(tst_qml PRIVATE
+    ${XDOWN_ROOT_DIR}/src/core/DBManager.cpp
+    ${XDOWN_ROOT_DIR}/src/core/HttpDownloader.cpp
+    ${XDOWN_ROOT_DIR}/src/core/DownloadEngine.cpp
+    ${XDOWN_ROOT_DIR}/src/gui/TaskListModel.cpp
+)
+
+target_link_libraries(tst_qml PRIVATE
+    Qt6::Core
+    Qt6::Test
+    Qt6::Network
+    Qt6::Sql
+    Qt6::Qml
+    Qt6::Quick
+    Qt6::QuickControls2
+)
+
+add_test(NAME QmlLoadTest COMMAND tst_qml)
