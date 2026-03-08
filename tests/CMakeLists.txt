@@ -39,6 +39,7 @@ target_link_libraries(test_downloadtask PRIVATE
     Qt6::Core
     Qt6::Test
     Qt6::Sql
+    Qt6::Network
 )
 
 add_test(NAME DownloadTaskTest COMMAND test_downloadtask)

@@ -7,10 +7,14 @@ import time
 qt_bin = r"E:\Qt\6.5.3\mingw_64\bin"
 qt_plugins = r"E:\Qt\6.5.3\mingw_64\plugins"
 
-# Get current PATH and prepend Qt bin
+# MSYS2 / Git Bash MinGW bin path - must be BEFORE Qt to ensure correct libstdc++ version
+# This uses GCC 14.2 compatible libstdc++ instead of Qt's GCC 11.2 version
+mingw_bin = r"E:\DevelopmentTool\mingw64\bin"
+
+# Get current PATH and prepend MSYS2 + Qt (MSYS2 first for libstdc++ priority)
 env = os.environ.copy()
 current_path = env.get("PATH", "")
-env["PATH"] = f"{current_path};{qt_bin}"
+env["PATH"] = f"{mingw_bin};{current_path};{qt_bin}"
 env["QT_PLUGIN_PATH"] = qt_plugins
 env["PYTHONIOENCODING"] = "utf-8"
 env["PYTHONUTF8"] = "1"
