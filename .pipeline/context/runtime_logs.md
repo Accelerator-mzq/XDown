@@ -695,3 +695,46 @@ UpdateCTestConfiguration  from :D:/ClaudeProject/XXC
 - 2026-03-08 16:21:01 [SUCCESS] [执行完毕] 所有测试通过！
 - 2026-03-08 16:21:01 [INFO] [执行完毕] 测试报告: D:\ClaudeProject\XDown\.pipeline\test-loop-report.md
 - 2026-03-08 16:21:01 [INFO] [执行完毕] 详细日志: D:\ClaudeProject\XDown\.pipeline\logs\test-loop-20260308_161200.log
+- 2026-03-08 16:50:00 [INFO] [SmartRoute 自动化测试循环启动] 
+- 2026-03-08 16:50:00 [INFO] [SmartRoute 自动化测试循环启动] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- 2026-03-08 16:50:00 [INFO] [SmartRoute 自动化测试循环启动] 📋 SmartRoute 自动化测试循环启动
+- 2026-03-08 16:50:00 [INFO] [SmartRoute 自动化测试循环启动] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- 2026-03-08 16:50:00 [INFO] [SmartRoute 自动化测试循环启动] 项目目录: D:\ClaudeProject\XDown
+- 2026-03-08 16:50:00 [INFO] [SmartRoute 自动化测试循环启动] 执行批次: execution_003
+- 2026-03-08 16:50:00 [INFO] [SmartRoute 自动化测试循环启动] 编译命令: cmake --build build --config Debug -j 8
+- 2026-03-08 16:50:00 [INFO] [SmartRoute 自动化测试循环启动] 测试命令: powershell -ExecutionPolicy Bypass -File .\Run-Test.ps1 -Module net -Param "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+- 2026-03-08 16:50:00 [INFO] [SmartRoute 自动化测试循环启动] 最大重试: 3
+- 2026-03-08 16:50:00 [INFO] [SmartRoute 自动化测试循环启动] 上下文限制: 12000
+- 2026-03-08 16:50:00 [INFO] [SmartRoute 自动化测试循环启动] 任务文件: .smartroute/task.md
+- 2026-03-08 16:50:00 [INFO] [SmartRoute 自动化测试循环启动] 任务图顺序: 1:planner -> 2:coder -> 3:test_coder -> 4:runtime -> 5:fixer -> 6:debug_expert
+- 2026-03-08 16:50:00 [INFO] [SmartRoute 自动化测试循环启动] 状态机阶段: INIT
+- 2026-03-08 16:50:00 [INFO] [阶段 0: Planner 任务拆解] 
+- 2026-03-08 16:50:00 [INFO] [阶段 0: Planner 任务拆解] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- 2026-03-08 16:50:00 [INFO] [阶段 0: Planner 任务拆解] 📋 阶段 0: Planner 任务拆解
+- 2026-03-08 16:50:00 [INFO] [阶段 0: Planner 任务拆解] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- 2026-03-08 16:50:00 [INFO] [阶段 0: Planner 任务拆解] 状态机阶段: PLANNING
+- 2026-03-08 16:50:00 [NODE_START] [阶段 0: Planner 任务拆解] ▶ [PLANNER] 开始执行: Planner 生成执行计划
+- 2026-03-08 16:50:06 [NODE_END] [阶段 0: Planner 任务拆解] ◀ ✅ 成功: Planner 生成执行计划
+- 2026-03-08 16:50:06 [INFO] [阶段 0.1: Coder 业务编码] 
+- 2026-03-08 16:50:06 [INFO] [阶段 0.1: Coder 业务编码] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- 2026-03-08 16:50:06 [INFO] [阶段 0.1: Coder 业务编码] 📋 阶段 0.1: Coder 业务编码
+- 2026-03-08 16:50:06 [INFO] [阶段 0.1: Coder 业务编码] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- 2026-03-08 16:50:06 [INFO] [阶段 0.1: Coder 业务编码] 状态机阶段: CODING
+- 2026-03-08 16:50:06 [NODE_START] [阶段 0.1: Coder 业务编码] ▶ [CODER] 开始执行: Coder 代码生成
+- 2026-03-08 16:50:10 [NODE_END] [阶段 0.1: Coder 业务编码] ◀ ✅ 成功: Coder 代码生成 | 目标文件: 0
+- 2026-03-08 16:50:10 [INFO] [阶段 0.2: Test Coder 测试编码] 
+- 2026-03-08 16:50:10 [INFO] [阶段 0.2: Test Coder 测试编码] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- 2026-03-08 16:50:10 [INFO] [阶段 0.2: Test Coder 测试编码] 📋 阶段 0.2: Test Coder 测试编码
+- 2026-03-08 16:50:10 [INFO] [阶段 0.2: Test Coder 测试编码] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- 2026-03-08 16:50:10 [INFO] [阶段 0.2: Test Coder 测试编码] 状态机阶段: CODING
+- 2026-03-08 16:50:10 [NODE_START] [阶段 0.2: Test Coder 测试编码] ▶ [TEST_CODER] 开始执行: Test Coder 测试代码生成
+- 2026-03-08 16:50:20 [ERROR] [阶段 0.2: Test Coder 测试编码] 未预期的异常: [Errno 2] No such file or directory: 'D:\\ClaudeProject\\XDown\\tests\\...\\xxx.cpp'
+- 2026-03-08 16:50:20 [INFO] [阶段 0.2: Test Coder 测试编码] 状态已保存: D:\ClaudeProject\XDown\.pipeline\last-state.json
+- 2026-03-08 16:50:20 [INFO] [阶段 0.2: Test Coder 测试编码] 工件快照文件数: 0
+- 2026-03-08 16:50:20 [INFO] [执行完毕] 
+- 2026-03-08 16:50:20 [INFO] [执行完毕] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- 2026-03-08 16:50:20 [INFO] [执行完毕] 📋 执行完毕
+- 2026-03-08 16:50:20 [INFO] [执行完毕] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- 2026-03-08 16:50:20 [INFO] [执行完毕] 最终状态: error
+- 2026-03-08 16:50:20 [INFO] [执行完毕] 测试报告: D:\ClaudeProject\XDown\.pipeline\test-loop-report.md
+- 2026-03-08 16:50:20 [INFO] [执行完毕] 详细日志: D:\ClaudeProject\XDown\.pipeline\logs\test-loop-20260308_165000.log
