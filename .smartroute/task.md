@@ -7,7 +7,7 @@
 
 ---
 
-## [Task Objective]
+[Task Objective]
 
 实现 XDown v2.0 的核心功能，包括：
 
@@ -42,7 +42,7 @@
 
 ---
 
-## [Strict Rules]
+[Strict Rules]
 
 ### 代码规范
 
@@ -76,7 +76,7 @@
 
 ---
 
-## [Target Files]
+[Target Files]
 
 ### 核心模块（优先级 P0）
 
