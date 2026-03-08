@@ -1,3 +1,7 @@
+---
+description: ﻿# 阶段10：代码 Review（Reviewer / CLI）
+---
+
 ﻿# 阶段10：代码 Review（Reviewer / CLI）
 
 > 路径以 `smartroute.config.json.documents` 为准。
@@ -9,4 +13,4 @@
 
 输出：
 - `documents.review_dir/review-report-{日期}.md`
-- 若存在问题，进入阶段11：`/project:review-fix`
+- 若存在问题，进入阶段11：`/review-fix`

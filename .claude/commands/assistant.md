@@ -1,3 +1,7 @@
+---
+description: ﻿# 阶段1：日常提问（Assistant / CLI）
+---
+
 ﻿# 阶段1：日常提问（Assistant / CLI）
 
 用途：基础技术问答与解释，不涉及工程文件修改。
@@ -11,4 +15,4 @@
 
 输出：
 - 可执行建议或结论
-- 若需落地，给出下一阶段命令（`/project:requirements` 或 `/project:design`）
+- 若需落地，给出下一阶段命令（`/requirements` 或 `/design`）

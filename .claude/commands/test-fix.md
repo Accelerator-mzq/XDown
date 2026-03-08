@@ -1,6 +1,10 @@
+---
+description: ﻿# 辅助命令：阶段9 问题定位与修复（Fixer / Debug Expert）
+---
+
 ﻿# 辅助命令：阶段9 问题定位与修复（Fixer / Debug Expert）
 
-说明：仅用于紧急手动会诊；主线仍推荐 `/project:test-loop` 自动闭环。
+说明：仅用于紧急手动会诊；主线仍推荐 `/test-loop` 自动闭环。
 
 执行：
 1. 复现并定位问题，先由 Fixer 尝试修复。

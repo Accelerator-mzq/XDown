@@ -1,3 +1,7 @@
+---
+description: ﻿# 阶段2：需求分析（PM / CLI）
+---
+
 ﻿# 阶段2：需求分析（PM / CLI）
 
 > 路径以 `smartroute.config.json.documents` 为准。
@@ -12,4 +16,4 @@
 
 输出：
 - 保存至 `documents.requirements_dir`。
-- 文档末尾附“进入阶段3设计命令”：`/project:design`。
+- 文档末尾附“进入阶段3设计命令”：`/design`。
