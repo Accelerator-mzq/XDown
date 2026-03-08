@@ -82,10 +82,19 @@ set_target_properties(appXDown PROPERTIES
 if(WIN32)
     add_definitions(-DUNICODE -D_UNICODE)
 
-    add_custom_command(TARGET appXDown POST_BUILD
-        COMMAND ${CMAKE_PREFIX_PATH}/bin/windeployqt.exe $<TARGET_FILE:appXDown> --qmldir ${CMAKE_PREFIX_PATH}/qml
-        COMMENT "Running windeployqt to copy Qt DLLs and QML modules..."
-    )
+    # 尝试找到依赖 Qt 版本对应的 windeployqt
+    get_target_property(_qmake_executable Qt6::qmake IMPORTED_LOCATION)
+    get_filename_component(_qt_bin_dir "${_qmake_executable}" DIRECTORY)
+    find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${_qt_bin_dir}")
+
+    if(WINDEPLOYQT_EXECUTABLE)
+        add_custom_command(TARGET appXDown POST_BUILD
+            COMMAND "${WINDEPLOYQT_EXECUTABLE}" $<TARGET_FILE:appXDown>
+            COMMENT "Running windeployqt to copy Qt DLLs..."
+        )
+    else()
+        message(WARNING "windeployqt not found! Qt DLLs will not be deployed automatically.")
+    endif()
 endif()
 
 # 安装配置
