@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.20)
 
+# ============================================
+# 编译器配置：使用 GCC 11.2 (与 Qt 6.5.3 配套)
+# ============================================
+set(CMAKE_C_COMPILER "E:/Qt/Tools/mingw1120_64/bin/gcc.exe")
+set(CMAKE_CXX_COMPILER "E:/Qt/Tools/mingw1120_64/bin/g++.exe")
+
 # 项目配置
 project(XDown VERSION 1.0.0 LANGUAGES CXX)
 
@@ -35,7 +41,15 @@ set(CORE_SOURCES
     src/core/DBManager.cpp
     src/core/HttpDownloader.cpp
     src/core/DownloadEngine.cpp
+    src/core/SettingsManager.cpp
     src/gui/TaskListModel.cpp
+    # v2.0 新增模块
+    src/core/download/IDownloadEngine.cpp
+    src/core/download/ChunkDownloader.cpp
+    src/core/download/AdaptiveThreadController.cpp
+    src/core/download/HTTPDownloadEngine.cpp
+    src/core/download/BTDownloadEngine.cpp
+    src/core/task/TaskManager.cpp
 )
 
 add_library(XDownCore STATIC ${CORE_SOURCES})
